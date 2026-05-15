@@ -1,0 +1,970 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Abnormies — Specification</title>
+<meta name="description" content="Abnormies — Production specification, draft v0.8.">
+<style>
+@font-face {
+  font-family: 'Robotastic';
+  src: url('data:font/ttf;base64,AAEAAAAKAIAAAwAgT1MvMgSWB8oAAAukAAAAYGNtYXAejiBZAAAArAAAAgRnbHlm3jgmngAADCQAABxIaGVhZF8Q/5AAAAKwAAAANmhoZWEDAP59AAAC6AAAACRobXR4QYAEvgAAAwwAAAGYbG9jYQAAR3MAAChsAAABnG1heHAAZv+5AAAEpAAAACBuYW1lZBDrDgAABMQAAAbecG9zdAAC//0AAAwEAAAAIAAAAAIAAAADAAAAFAADAAEAAAEMAAQA+AAAAAgACAACAAAAfiAZIB3//wAAACAgGCAc////4+BK4EgAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAD4AAAACAAIAAIAAAB+IBkgHf//AAAAICAYIBz////j4ErgSAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAQAAHucPyV8PPPUAAAQAAAAAAM9wM0cAAAAAz3AzR//A/4AEQAMAAAAACAACAAEAAAAAAAEAAAMA/4AAAASA/8AAQASAAAEAAAAAAAAAAAAAAAAAAABmAgAAAAAAAAABwAAAAcAAAAEAAEABwABABAAAQAQAAEAEAABAAgAAQAEAAEACQACAAgAAQAIAAEAEAABAAQAAQAQAAEABAABABAAAQAQAAEABAABABAAAQAQAAEAEAABABAAAQAQAAEAEAAAABAAAAAQAAEABAABAAQAAQAKAAEAEAABAAoAAQAQAAEAEAABABAAAQAQAAEAEAABABAAAQAQAAEAEAABABAAAQAQAAEABAABABAAAQAQAAEAEAABABAAAQAQAAEAEAABABAAAQASAAEAEAABABAAAQAQAAEAEAABABAAAQAQAAEAEAABABAAAQAQAAEABgABABAAAQAGAAEACAABABAAAQAEAAEAEAABABAAAQAQAAEAEAABABAAAQAQAAEAEAABABAAAQAEAAEAEAABABAAAQAQAAEAEAABABAAAQAQAAEAEAABABIAAQAQAAEAEAABABAAAQAQAAEAEAABABAAAQAQAAEAEAABABAAAQAGA/8ABAABAAgAAQAQAAEABAABAAQAAQAHAAEABwABAAAEAAABmACAABwAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAiAZ4AAQAAAAAAAAAcAAAAAQAAAAAAAQAKABwAAQAAAAAAAgAHACYAAQAAAAAAAwAVAC0AAQAAAAAABAASAEIAAQAAAAAABQALAFQAAQAAAAAABgAKAF8AAQAAAAAABwA8AGkAAQAAAAAACAAVAKUAAQAAAAAACQANALoAAQAAAAAACgArAMcAAQAAAAAACwAXAPIAAQAAAAAADAAwAQkAAQAAAAAADQAoATkAAQAAAAAADgAuAWEAAQAAAAAAEwApAY8AAQAAAAABAAAIAbgAAwABBAkAAAA4AcAAAwABBAkAAQAUAfgAAwABBAkAAgAOAgwAAwABBAkAAwAqAhoAAwABBAkABAAkAkQAAwABBAkABQAWAmgAAwABBAkABgAUAn4AAwABBAkABwB4ApIAAwABBAkACAAqAwoAAwABBAkACQAaAzQAAwABBAkACgBWA04AAwABBAkACwAuA6QAAwABBAkADABgA9IAAwABBAkADQBQBDIAAwABBAkADgBcBIIAAwABBAkAEwBSBN4AAwABBAkBAAAQBTBDb3B5cmlnaHQgRGFycmVsbCBGbG9vZCAyMDE0Um9ib3Rhc3RpY1JlZ3VsYXJGb250U3RydWN0IFJvYm90YXN0aWNSb2JvdGFzdGljIFJlZ3VsYXJWZXJzaW9uIDEuMFJvYm90YXN0aWNGb250U3RydWN0IGlzIGEgdHJhZGVtYXJrIG9mIEZTSSBGb250U2hvcCBJbnRlcm5hdGlvbmFsIEdtYkhodHRwOi8vZm9udHN0cnVjdC5jb21EYXJyZWxsIEZsb29k4oCcUm9ib3Rhc3RpY+KAnSB3YXMgYnVpbHQgd2l0aCBGb250U3RydWN0Cmh0dHA6Ly93d3cuZm9udHNob3AuY29taHR0cDovL2ZvbnRzdHJ1Y3QuY29tL2ZvbnRzdHJ1Y3Rpb25zL3Nob3cvOTgxNDEzQ3JlYXRpdmUgQ29tbW9ucyBBdHRyaWJ1dGlvbiBTaGFyZSBBbGlrZWh0dHA6Ly9jcmVhdGl2ZWNvbW1vbnMub3JnL2xpY2Vuc2VzL2J5LXNhLzMuMC9GaXZlIGJpZyBxdWFja2luZyB6ZXBoeXJzIGpvbHQgbXkgd2F4IGJlZEN3RUpjVmhuAEMAbwBwAHkAcgBpAGcAaAB0ACAARABhAHIAcgBlAGwAbAAgAEYAbABvAG8AZAAgADIAMAAxADQAUgBvAGIAbwB0AGEAcwB0AGkAYwBSAGUAZwB1AGwAYQByAEYAbwBuAHQAUwB0AHIAdQBjAHQAIABSAG8AYgBvAHQAYQBzAHQAaQBjAFIAbwBiAG8AdABhAHMAdABpAGMAIABSAGUAZwB1AGwAYQByAFYAZQByAHMAaQBvAG4AIAAxAC4AMABSAG8AYgBvAHQAYQBzAHQAaQBjAEYAbwBuAHQAUwB0AHIAdQBjAHQAIABpAHMAIABhACAAdAByAGEAZABlAG0AYQByAGsAIABvAGYAIABGAFMASQAgAEYAbwBuAHQAUwBoAG8AcAAgAEkAbgB0AGUAcgBuAGEAdABpAG8AbgBhAGwAIABHAG0AYgBIAGgAdAB0AHAAOgAvAC8AZgBvAG4AdABzAHQAcgB1AGMAdAAuAGMAbwBtAEQAYQByAHIAZQBsAGwAIABGAGwAbwBvAGQgGgDEAPoAUgBvAGIAbwB0AGEAcwB0AGkAYyAaAMQA+QAgAHcAYQBzACAAYgB1AGkAbAB0ACAAdwBpAHQAaAAgAEYAbwBuAHQAUwB0AHIAdQBjAHQACgBoAHQAdABwADoALwAvAHcAdwB3AC4AZgBvAG4AdABzAGgAbwBwAC4AYwBvAG0AaAB0AHQAcAA6AC8ALwBmAG8AbgB0AHMAdAByAHUAYwB0AC4AYwBvAG0ALwBmAG8AbgB0AHMAdAByAHUAYwB0AGkAbwBuAHMALwBzAGgAbwB3AC8AOQA4ADEANAAxADMAQwByAGUAYQB0AGkAdgBlACAAQwBvAG0AbQBvAG4AcwAgAEEAdAB0AHIAaQBiAHUAdABpAG8AbgAgAFMAaABhAHIAZQAgAEEAbABpAGsAZQBoAHQAdABwADoALwAvAGMAcgBlAGEAdABpAHYAZQBjAG8AbQBtAG8AbgBzAC4AbwByAGcALwBsAGkAYwBlAG4AcwBlAHMALwBiAHkALQBzAGEALwAzAC4AMAAvAEYAaQB2AGUAIABiAGkAZwAgAHEAdQBhAGMAawBpAG4AZwAgAHoAZQBwAGgAeQByAHMAIABqAG8AbAB0ACAAbQB5ACAAdwBhAHgAIABiAGUAZABDAHcARQBKAGMAVgBoAG4AAAACA2cBkAAFAAQCAAIAAAAAAAIAAgAAAAIAADMAzAAAAAAEAAAAAAAAAIAAAAEAAAAAAAAAAAAAAABGU1RSAEAAICAdAoAAAAAAAwAAgAAAAAEAAAAAAoACgAAAACAAAAADAAAAAAAAAGYAMwAAAAAAAAAAAAAAAAAAAAAAAAAAAAUAAAAAAoACgAADAAcACwASABYAAAEBAQEBAQEBAQEBAQEBAQABAAEBAQEBAUAAAP+aAAAAywAA/zUAAABmAAD/mgAAAMsAAP+b/9X/4//iAAD/JgAAAoAAAABaAGYAAP+aAHcAZgAA/5oAdwBmAAD/mgB3AGUAAAAA/+P/4f/X/kECgAAA/YAAAAAAAgBAAAAAwAKAAAMABwAAAQEBAQEBAQEAQAAAAIAAAP+AAAAAgAAAAAAAgAAA/4ABAAGAAAD+gAACAEACAAGAAoAAAwAHAAABAQEBAQEBAQBAAAAAgAAAAEAAAACAAAACAACAAAD/gAAAAIAAAP+AAAIAQAAAA8ACgAADAB8AAAEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAsAAAP6AAAD/gAAA/4AAAACAAAD/gAAAAIAAAACAAAABgAAAAIAAAACAAAD/gAAAAIAAAP+AAAD/gAAA/oAAAAEAAIAAAP+A/wAAgAAAAIAAAACAAAAAgAAAAIAAAP+AAAAAgAAA/4AAAP+AAAD/gAAA/4AAAP+AAAAAgAAA/4AAAwBA/4ADwAMAAAMABwAbAAABAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBA0AAAP8AAAD/gAAA/wAAAAEAAAD+gAAAAYAAAP6AAAABgAAAAIAAAAGAAAD+gAAAAYAAAP6AAAAAgACAAAD/gAEAAIAAAP+A/gAAgAAAAIAAAACAAAABgAAAAIAAAP+AAAD/gAAA/4AAAP6AAAD/gAAAAAMAQAAAA8ACgAADAAcADwAAAQEBAQEBAQEBAQEBAQEBAQJAAAAAgAAA/oAAAACAAAD+gAAAAwAAAACAAAD9AAAAAAAAgAAA/4ACAACAAAD/gP4AAYAAAAEAAAD+gAAA/wAAAAABAEAAgAHAAgAACwAAAQEBAQEBAQEBAQEBAMAAAP+AAAAAgAAAAIAAAACAAAD/gAAAAIAAgAAAAIAAAACAAAD/gAAA/4AAAP+AAAAAAQBAAgAAwAKAAAMAAAEBAQEAQAAAAIAAAAIAAIAAAP+AAAAAAQCA/4ACAAMAAAcAAAEBAQEBAQEBAIAAAAGAAAD/AAAAAQAAAP+AA4AAAP+AAAD9gAAA/4AAAAABAED/gAHAAwAABwAAAQEBAQEBAQEAQAAAAQAAAP8AAAABgAAA/4AAgAAAAoAAAACAAAD8gAAAAAEAQAEAAcACgAALAAABAQEBAQEBAQEBAQEAwAAA/4AAAACAAAAAgAAAAIAAAP+AAAABAACAAAAAgAAAAIAAAP+AAAD/gAAA/4AAAAABAEAAAAPAAoAACwAAAQEBAQEBAQEBAQEBAcAAAP6AAAABgAAAAIAAAAGAAAD+gAAAAAABAAAAAIAAAAEAAAD/AAAA/4AAAP8AAAAAAQBA/4AAwACAAAMAAAEBAQEAQAAAAIAAAP+AAQAAAP8AAAAAAQBAAQADwAGAAAMAAAEBAQEAQAAAA4AAAAEAAIAAAP+AAAAAAQBAAAAAwACAAAMAAAEBAQEAQAAAAIAAAAAAAIAAAP+AAAAABwBA/4ADwAMAAAMABwALAA8AEwAXABsAAAEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEAQAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAP+AAIAAAP+AAIAAgAAA/4AAgACAAAD/gACAAIAAAP+AAIAAgAAA/4AAgACAAAD/gACAAIAAAP+AAAAAAgBAAAADwAKAAAMABwAAAQEBAQEBAQEDQAAA/YAAAP+AAAADgAAAAIABgAAA/oD/gAKAAAD9gAABAEAAAADAAoAAAwAAAQEBAQBAAAAAgAAAAAACgAAA/YAAAAABAEAAAAPAAoAACwAAAQEBAQEBAQEBAQEBAEAAAAMAAAD9AAAAA4AAAP0AAAADAAAAAAABgAAAAIAAAACAAAD+gAAA/4AAAP+AAAAAAQBAAAADwAKAAAsAAAEBAQEBAQEBAQEBAQBAAAADAAAA/QAAAAMAAAD9AAAAA4AAAAAAAIAAAACAAAAAgAAAAIAAAACAAAD9gAAAAAEAQAAAA8ACgAAJAAABAQEBAQEBAQEBA0AAAP0AAAAAgAAAAoAAAACAAAAAAAEAAAABgAAA/wAAAAEAAAD9gAABAEAAAAPAAoAACwAAAQEBAQEBAQEBAQEBAEAAAAMAAAD9AAAAA4AAAP0AAAADAAAAAAAAgAAAAIAAAAGAAAD/gAAA/4AAAP6AAAAAAgBAAAADwAKAAAMACwAAAQEBAQEBAQEBAQEBA0AAAP2AAAD/gAAAA4AAAP0AAAADAAAAAIAAgAAA/4D/gAKAAAD/gAAA/4AAAP6AAAEAAAAAA8ACgAAFAAABAQEBAQEDQAAA/MAAAAPAAAAAAAIAAAAAgAAA/YAAAwAAAAADwAKAAAMABwALAAABAQEBAQEBAQEBAQEDQAAA/UAAAALAAAD9QAAA/4AAAAPAAAAAgACAAAD/gAEAAIAAAP+A/oACgAAA/YAAAAACAEAAAAPAAoAAAwAJAAABAQEBAQEBAQEBA0AAAP2AAAACgAAA/QAAAAOAAAABgACAAAD/gP6AAQAAAAGAAAD9gAAAAAIAQAAAAMACgAADAAcAAAEBAQEBAQEBAEAAAACAAAD/gAAAAIAAAAAAAIAAAP+AAgAAgAAA/4AAAgBA/4AAwAKAAAMABwAAAQEBAQEBAQEAQAAAAIAAAP+AAAAAgAAA/4ABAAAA/wACgACAAAD/gAAHAED/gAJAAwAAAwAHAAsADwATABcAGwAAAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQHAAAAAgAAA/wAAAACAAAD/AAAAAIAAAP8AAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAA/4AAgAAA/4AAgACAAAD/gACAAIAAAP+AAIAAgAAA/4AAgACAAAD/gACAAIAAAP+AAIAAgAAA/4AAAAACAEAAgAPAAgAAAwAHAAABAQEBAQEBAQBAAAADgAAA/IAAAAOAAAAAgACAAAD/gAEAAIAAAP+AAAcAQP+AAkADAAADAAcACwAPABMAFwAbAAABAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAEAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAD/AAAAAIAAAP8AAAAAgAAA/wAAAACAAAD/gACAAAD/gACAAIAAAP+AAIAAgAAA/4AAgACAAAD/gACAAIAAAP+AAIAAgAAA/4AAgACAAAD/gAAAAAIAQAAAA8ACgAADAAsAAAEBAQEBAQEBAQEBAQHAAAAAgAAA/4AAAAGAAAD9AAAAA4AAAAAAAIAAAP+AAQAAgAAAAIAAAACAAAD+gAABAEAAAAPAAoAACwAAAQEBAQEBAQEBAQEBAEAAAAOAAAD9gAAAAgAAAP2AAAADAAAAAAACgAAA/oAAAACAAAAAgAAA/oAAAP+AAAAAAgBAAAADwAKAAAMACwAAAQEBAQEBAQEBAQEBA0AAAP2AAAD/gAAAA4AAAP+AAAD9gAAAAYAAgAAA/4D+gAKAAAD9gAAAAQAAAP8AAAEAQAAAA8ACgAAPAAABAQEBAQEBAQEBAQEBAQEBAEAAAAOAAAD/gAAA/YAAAAKAAAD9gAAAAoAAAACAAAAAAAKAAAD/AAAAAIAAAP+AAAD/gAAA/4AAAACAAAD/AAAAAAEAQAAAA8ACgAAHAAABAQEBAQEBAQBAAAADgAAA/QAAAAMAAAAAAAKAAAD/gAAA/oAAAP+AAAAAAgBAAAADwAKAAAMABwAAAQEBAQEBAQEDQAAA/YAAAP+AAAADgAAAAIABgAAA/oD/gAKAAAD9gAABAEAAAAPAAoAACwAAAQEBAQEBAQEBAQEBAEAAAAOAAAD9AAAAAwAAAP0AAAADAAAAAAACgAAA/4AAAP+AAAD/gAAA/4AAAP+AAAAAAQBAAAADwAKAAAkAAAEBAQEBAQEBAQEAQAAAA4AAAP0AAAADAAAA/QAAAAAAAoAAAP+AAAD/gAAA/4AAAP8AAAEAQAAAA8ACgAAJAAABAQEBAQEBAQEBAEAAAAOAAAD9AAAAAoAAAACAAAAAAAKAAAD/gAAA/oAAAAEAAAD+gAABAEAAAAPAAoAACwAAAQEBAQEBAQEBAQEBAEAAAACAAAACgAAAAIAAAP+AAAD9gAAAAAACgAAA/wAAAAEAAAD9gAAAAQAAAP8AAAAAAQBAAAAAwAKAAAMAAAEBAQEAQAAAAIAAAAAAAoAAAP2AAAAAAQBAAAADwAKAAAcAAAEBAQEBAQEBAEAAAAMAAAD9AAAAA4AAAAAAAIAAAAGAAAAAgAAA/YAAAAADAEAAAAPAAoAAAwALAA8AAAEBAQEBAQEBAQEBAQEBAQEDQAAAAIAAAPyAAAAAgAAAAoAAAP2AAAACgAAAAIAAAAAAAQAAAP8AAAACgAAA/wAAAP+AAAD/AAGAAQAAAP8AAAAAAQBAAAADwAKAAAUAAAEBAQEBAQBAAAAAgAAAAwAAAAAAAoAAAP4AAAD/gAABAEAAAAPAAoAACwAAAQEBAQEBAQEBAQEBAEAAAAOAAAD/gAAA/wAAAP+AAAD/AAAAAAACgAAA/YAAAAIAAAD+AAAAAgAAAP4AAAAAAQBAAAADwAKAAAcAAAEBAQEBAQEBAEAAAAOAAAD/gAAA/YAAAAAAAoAAAP2AAAACAAAA/gAAAAACAEAAAAPAAwAAAwALAAABAQEBAQEBAQEBAQEDQAAA/YAAAP+AAAABgAAAAIAAAAGAAAAAgAGAAAD+gP+AAoAAAACAAAD/gAAA/YAAAgBAAAADwAKAAAMACQAAAQEBAQEBAQEBAQNAAAD9gAAA/4AAAAOAAAD9AAAAAYAAgAAA/4D+gAKAAAD+gAAA/wAAAAACAEAAAARAAoAAAwALAAABAQEBAQEBAQEBAQEDQAAA/YAAAP+AAAADgAAAAIAAAP+AAAAAgAGAAAD+gP+AAoAAAP8AAAD/gAAA/wAAAgBAAAADwAKAAAMADwAAAQEBAQEBAQEBAQEBAQEBAQNAAAAAgAAA/IAAAAOAAAD/gAAA/YAAAAKAAAD9gAAAAAABAAAA/wAAAAKAAAD/AAAAAIAAAP+AAAD/gAAA/wAAAQBAAAADwAKAAAsAAAEBAQEBAQEBAQEBAQBAAAADAAAA/QAAAAOAAAD9AAAAAwAAAAAAAIAAAACAAAABgAAA/4AAAP+AAAD+gAAAAAEAQAAAA8ACgAAHAAABAQEBAQEBAQHAAAD+gAAAA4AAAP6AAAAAAAIAAAAAgAAA/4AAAP4AAAAAAQBAAAADwAKAAAcAAAEBAQEBAQEBAEAAAACAAAACgAAAAIAAAAAAAoAAAP4AAAACAAAA/YAAAAADAEAAAAPAAoAAAwAHAAsAAAEBAQEBAQEBAQEBAQDAAAACgAAA/QAAAACAAAACgAAAAIAAAAAAAIAAAP+AAIACAAAA/gAAAAIAAAD+AAAAAAEAQAAAA8ACgAALAAABAQEBAQEBAQEBAQEAQAAAAIAAAAEAAAAAgAAAAQAAAACAAAAAAAKAAAD+AAAAAgAAAP4AAAACAAAA/YAAAAAFAEAAAAPAAoAAAwAHAAsADwATAAABAQEBAQEBAQEBAQEBAQEBAQEBAQBAAAAAgAAAAoAAAACAAAD9AAAAAoAAAP0AAAAAgAAAAoAAAACAAAAAAAEAAAD/AAAAAQAAAP8AAQAAgAAA/4AAgAEAAAD/AAAAAQAAAP8AAAAAAQBAAAADwAKAAAsAAAEBAQEBAQEBAQEBAQHAAAD+gAAAAIAAAAKAAAAAgAAA/oAAAAAAAQAAAAGAAAD/AAAAAQAAAP6AAAD/AAAAAAEAQAAAA8ACgAALAAABAQEBAQEBAQEBAQEAQAAAAwAAAP0AAAADgAAA/QAAAAMAAAAAAAGAAAAAgAAAAIAAAP6AAAD/gAAA/4AAAAABAED/gAFAAwAABwAAAQEBAQEBAQEAQAAAAQAAAP+AAAAAgAAA/4ADgAAA/4AAAP2AAAD/gAAAAAcAQP+AA8ADAAADAAcACwAPABMAFwAbAAABAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBA0AAAACAAAD/AAAAAIAAAP8AAAAAgAAA/wAAAACAAAD/AAAAAIAAAP8AAAAAgAAA/wAAAACAAAD/gACAAAD/gACAAIAAAP+AAIAAgAAA/4AAgACAAAD/gACAAIAAAP+AAIAAgAAA/4AAgACAAAD/gAAAAAEAQP+AAUADAAAHAAABAQEBAQEBAQBAAAAAgAAA/4AAAAEAAAD/gACAAAACgAAAAIAAAPyAAAAAAQBAAYABwAKAAAcAAAEBAQEBAQEBAEAAAAGAAAD/gAAA/4AAAAGAAQAAAP8AAAAAgAAA/4AAAAABAED/gAPAAAAAAwAAAQEBAQBAAAADgAAA/4AAgAAA/4AAAAABAEACAADAAwAAAwAAAQEBAQBAAAAAgAAAAgABAAAA/wAAAAACAEAAAAPAAoAAAwALAAABAQEBAQEBAQEBAQEDQAAA/YAAAP+AAAADgAAA/4AAAP2AAAABgACAAAD/gP6AAoAAAP2AAAABAAAA/wAAAQBAAAADwAKAAA8AAAEBAQEBAQEBAQEBAQEBAQEAQAAAA4AAAP+AAAD9gAAAAoAAAP2AAAACgAAAAIAAAAAAAoAAAP8AAAAAgAAA/4AAAP+AAAD/gAAAAIAAAP8AAAAAAQBAAAADwAKAAAcAAAEBAQEBAQEBAEAAAAOAAAD9AAAAAwAAAAAAAoAAAP+AAAD+gAAA/4AAAAACAEAAAAPAAoAAAwAHAAABAQEBAQEBAQNAAAD9gAAA/4AAAAOAAAAAgAGAAAD+gP+AAoAAAP2AAAEAQAAAA8ACgAALAAABAQEBAQEBAQEBAQEAQAAAA4AAAP0AAAADAAAA/QAAAAMAAAAAAAKAAAD/gAAA/4AAAP+AAAD/gAAA/4AAAAABAEAAAAPAAoAACQAAAQEBAQEBAQEBAQBAAAADgAAA/QAAAAMAAAD9AAAAAAACgAAA/4AAAP+AAAD/gAAA/wAAAQBAAAADwAKAAAkAAAEBAQEBAQEBAQEAQAAAA4AAAP0AAAACgAAAAIAAAAAAAoAAAP+AAAD+gAAAAQAAAP6AAAEAQAAAA8ACgAALAAABAQEBAQEBAQEBAQEAQAAAAIAAAAKAAAAAgAAA/4AAAP2AAAAAAAKAAAD/AAAAAQAAAP2AAAABAAAA/wAAAAABAEAAAADAAoAAAwAAAQEBAQBAAAAAgAAAAAACgAAA/YAAAAABAEAAAAPAAoAABwAAAQEBAQEBAQEAQAAAAwAAAP0AAAADgAAAAAAAgAAAAYAAAACAAAD9gAAAAAMAQAAAA8ACgAADAAsADwAAAQEBAQEBAQEBAQEBAQEBAQNAAAAAgAAA/IAAAACAAAACgAAA/YAAAAKAAAAAgAAAAAABAAAA/wAAAAKAAAD/AAAA/4AAAP8AAYABAAAA/wAAAAABAEAAAAPAAoAABQAAAQEBAQEBAEAAAACAAAADAAAAAAACgAAA/gAAAP+AAAEAQAAAA8ACgAALAAABAQEBAQEBAQEBAQEAQAAAA4AAAP+AAAD/AAAA/4AAAP8AAAAAAAKAAAD9gAAAAgAAAP4AAAACAAAA/gAAAAABAEAAAAPAAoAABwAAAQEBAQEBAQEAQAAAA4AAAP+AAAD9gAAAAAACgAAA/YAAAAIAAAD+AAAAAAIAQAAAA8ADAAADAAsAAAEBAQEBAQEBAQEBAQNAAAD9gAAA/4AAAAGAAAAAgAAAAYAAAACAAYAAAP6A/4ACgAAAAIAAAP+AAAD9gAACAEAAAAPAAoAAAwAJAAABAQEBAQEBAQEBA0AAAP2AAAD/gAAAA4AAAP0AAAABgACAAAD/gP6AAoAAAP6AAAD/AAAAAAIAQAAABEACgAADAAsAAAEBAQEBAQEBAQEBAQNAAAD9gAAA/4AAAAOAAAAAgAAA/4AAAACAAYAAAP6A/4ACgAAA/wAAAP+AAAD/AAACAEAAAAPAAoAAAwAPAAABAQEBAQEBAQEBAQEBAQEBA0AAAACAAAD8gAAAA4AAAP+AAAD9gAAAAoAAAP2AAAAAAAEAAAD/AAAAAoAAAP8AAAAAgAAA/4AAAP+AAAD/AAABAEAAAAPAAoAACwAAAQEBAQEBAQEBAQEBAEAAAAMAAAD9AAAAA4AAAP0AAAADAAAAAAAAgAAAAIAAAAGAAAD/gAAA/4AAAP6AAAAAAQBAAAADwAKAAAcAAAEBAQEBAQEBAcAAAP6AAAADgAAA/oAAAAAAAgAAAACAAAD/gAAA/gAAAAABAEAAAAPAAoAABwAAAQEBAQEBAQEAQAAAAIAAAAKAAAAAgAAAAAACgAAA/gAAAAIAAAD9gAAAAAMAQAAAA8ACgAADAAcACwAAAQEBAQEBAQEBAQEBAMAAAAKAAAD9AAAAAIAAAAKAAAAAgAAAAAAAgAAA/4AAgAIAAAD+AAAAAgAAAP4AAAAAAQBAAAADwAKAAAsAAAEBAQEBAQEBAQEBAQBAAAAAgAAAAQAAAACAAAABAAAAAIAAAAAAAoAAAP4AAAACAAAA/gAAAAIAAAD9gAAAAAUAQAAAA8ACgAADAAcACwAPABMAAAEBAQEBAQEBAQEBAQEBAQEBAQEBAEAAAACAAAACgAAAAIAAAP0AAAACgAAA/QAAAACAAAACgAAAAIAAAAAAAQAAAP8AAAABAAAA/wABAACAAAD/gACAAQAAAP8AAAABAAAA/wAAAAABAEAAAAPAAoAACwAAAQEBAQEBAQEBAQEBAcAAAP6AAAAAgAAAAoAAAACAAAD+gAAAAAABAAAAAYAAAP8AAAABAAAA/oAAAP8AAAAAAQBAAAADwAKAAAsAAAEBAQEBAQEBAQEBAQBAAAADAAAA/QAAAAOAAAD9AAAAAwAAAAAAAYAAAACAAAAAgAAA/oAAAP+AAAD/gAAAAAH/wP+AAUADAAALAAABAQEBAQEBAQEBAQEAQAAA/4AAAACAAAABAAAA/4AAAACAAAD/gAGAAAAAgAAAAYAAAP+AAAD9gAAA/4AAAAABAED/gADAAwAAAwAAAQEBAQBAAAAAgAAA/4ADgAAA/IAAAAABAED/gAHAAwAACwAAAQEBAQEBAQEBAQEBAEAAAACAAAD/gAAAAQAAAACAAAD/gAAA/4AAgAAAAoAAAACAAAD+gAAA/4AAAP6AAAAAAQBAAIADwAIAAAsAAAEBAQEBAQEBAQEBAQBAAAACAAAAAQAAAACAAAD+AAAA/wAAAACAAYAAAP8AAAABAAAA/oAAAAEAAAD/AAAAAAEAQAIAAMACgAADAAABAQEBAEAAAACAAAACAACAAAD/gAAAAAEAQAIAAMACgAADAAABAQEBAEAAAACAAAACAACAAAD/gAAAAAIAQAIAAYACgAADAAcAAAEBAQEBAQEBAEAAAACAAAAAQAAAAIAAAAIAAIAAAP+AAAAAgAAA/4AAAgBAAgABgAKAAAMABwAAAQEBAQEBAQEAQAAAAIAAAABAAAAAgAAAAgAAgAAA/4AAAACAAAD/gAAAAAAAAACMAAAAjAAAAIwAAACMAAAAxAAAAPwAAAGsAAACTAAAArAAAAL8AAADIAAAA1gAAAOQAAAD3AAABCgAAARMAAAEcAAABJQAAAU8AAAFdAAABZgAAAXkAAAGMAAABnAAAAa8AAAHCAAABzQAAAeEAAAHyAAACAAAAAg4AAAI4AAACRgAAAnAAAAKDAAAClgAAAqkAAALBAAACzwAAAt0AAALwAAADAAAAAxAAAAMjAAADLAAAAzoAAANTAAADXgAAA3EAAAN/AAADkgAAA6MAAAO2AAADzgAAA+EAAAPvAAAD/QAABBEAAAQkAAAEQwAABFYAAARpAAAEdwAABKEAAASvAAAEvQAABMYAAATPAAAE4gAABPoAAAUIAAAFFgAABSkAAAU5AAAFSQAABVwAAAVlAAAFcwAABYwAAAWXAAAFqgAABbgAAAXLAAAF3AAABe8AAAYHAAAGGgAABigAAAY2AAAGSgAABl0AAAZ8AAAGjwAABqIAAAa1AAAGvgAABtEAAAbkAAAG7QAABvYAAAcEAAAHEg=') format('truetype');
+  font-display: block;
+}
+
+:root {
+  --bg: #ece8de;
+  --panel: #f4f1e9;
+  --text: #1c1a17;
+  --muted: #6b665e;
+  --border: #c8c2b3;
+  --accent: #8a4f30;
+  --paper: #e3e5e4;
+  --ink: #48494b;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: Georgia, "Iowan Old Style", "Palatino Linotype", Palatino, "Times New Roman", Times, serif;
+  font-size: 16px;
+  line-height: 1.65;
+}
+
+.wrap {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 64px 32px 80px;
+}
+
+@media (max-width: 600px) {
+  .wrap { padding: 40px 20px 60px; }
+  body { font-size: 15px; }
+}
+
+.back-link {
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  text-decoration: none;
+  margin-bottom: 32px;
+  display: inline-block;
+  transition: color 0.15s ease;
+}
+
+.back-link:hover { color: var(--accent); }
+
+.wordmark {
+  font-family: 'Robotastic', ui-monospace, monospace;
+  font-size: 44px;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  margin-bottom: 10px;
+  color: var(--text);
+  -webkit-font-smoothing: none;
+  -moz-osx-font-smoothing: unset;
+  font-smooth: never;
+}
+
+.subtitle {
+  font-family: 'Robotastic', ui-monospace, monospace;
+  font-size: 13px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 48px;
+  -webkit-font-smoothing: none;
+}
+
+/* Spec body */
+
+.spec h1 {
+  font-family: Georgia, serif;
+  font-weight: 400;
+  font-size: 28px;
+  letter-spacing: -0.3px;
+  margin-top: 56px;
+  margin-bottom: 16px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid var(--text);
+}
+
+.spec h1:first-child { margin-top: 0; }
+
+.spec h2 {
+  font-family: Georgia, serif;
+  font-weight: 400;
+  font-size: 22px;
+  letter-spacing: -0.2px;
+  margin-top: 40px;
+  margin-bottom: 12px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+.spec h3 {
+  font-family: Georgia, serif;
+  font-weight: 400;
+  font-size: 18px;
+  font-style: italic;
+  margin-top: 28px;
+  margin-bottom: 8px;
+  color: var(--text);
+}
+
+.spec h4 {
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-top: 20px;
+  margin-bottom: 6px;
+  color: var(--muted);
+}
+
+.spec h5 {
+  font-family: Georgia, serif;
+  font-weight: 600;
+  font-size: 14px;
+  margin-top: 16px;
+  margin-bottom: 6px;
+  color: var(--text);
+}
+
+.spec p { margin-bottom: 1.1em; }
+
+.spec ul, .spec ol {
+  margin-bottom: 1.1em;
+  padding-left: 28px;
+}
+
+.spec li { margin-bottom: 0.35em; line-height: 1.55; }
+
+.spec strong { font-weight: 600; color: var(--text); }
+
+.spec em { font-style: italic; }
+
+.spec code {
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-size: 0.88em;
+  background: var(--panel);
+  padding: 1px 5px;
+  border: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.spec pre {
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-size: 12px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  padding: 16px;
+  margin-bottom: 1.4em;
+  line-height: 1.5;
+  overflow-x: auto;
+  white-space: pre;
+}
+
+.spec pre code {
+  background: transparent;
+  border: none;
+  padding: 0;
+  white-space: pre;
+  font-size: 12px;
+}
+
+.spec table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 1.4em;
+  font-size: 14px;
+}
+
+.spec th, .spec td {
+  text-align: left;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+.spec th {
+  background: var(--panel);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  font-size: 13px;
+}
+
+.spec hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 32px 0;
+}
+
+.spec blockquote {
+  border-left: 3px solid var(--accent);
+  padding-left: 16px;
+  margin: 1.2em 0;
+  color: var(--muted);
+  font-style: italic;
+}
+
+.spec a {
+  color: var(--text);
+  text-decoration: none;
+  border-bottom: 1px solid var(--border);
+  transition: border-color 0.15s ease;
+}
+
+.spec a:hover { border-bottom-color: var(--accent); color: var(--accent); }
+
+.footer-rule {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 56px 0 24px;
+}
+
+.footer {
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.footer a {
+  color: var(--text);
+  text-decoration: none;
+  border-bottom: 1px solid var(--border);
+}
+
+.footer a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <a href="index.html" class="back-link">← Abnormies</a>
+
+  <div class="wordmark">SPECIFICATION</div>
+  <div class="subtitle">Draft v0.8 · Pre-deploy</div>
+
+  <div class="spec">
+<p><em>Co-authored with Claude Opus 4.7. This document may contain
+errors, will be updated as the project progresses, and should be
+considered directional rather than authoritative.</em></p>
+<p>Abnormies is a fully on-chain art collection derived from Normies
+(Serc, 2026), exploring network effects, lack of control, and
+randomness. Each Abnormie is bound 1:1 to a seed Normie, reads Normies
+contract data directly, and mutates through Normies’ economic activity
+rather than its own. Marks accumulate on the 40×40 canvas from
+transfers, customizations, and the destructive actions of other holders,
+cancelling against each other as they collide. The author is the
+network. In the agentic era, when a seed Normie has been awakened and
+its current owner also holds the corresponding Abnormie, the canvas
+inverts at render time. The record reads differently in the hands of the
+recorded.</p>
+<h2 id="thesis">Thesis</h2>
+<p>A Normie is something you mint, customize, and own. An Abnormie is
+the weather around that ownership, the marks left by transfers,
+customizations, and the destructive actions of others. Each Abnormie
+begins minimal. All evolve as the network acts on them. Some remain
+spare; others become dense. None of that content is authored by the
+Abnormie’s holder, except once, through destruction.</p>
+<p>The collection inverts the Normies social contract: in Normies, you
+burn others to refine yourself. In Abnormies, you preserve others by
+damaging everyone.</p>
+<h2 id="visual-independence-from-normies">Visual independence from
+Normies</h2>
+<p>Abnormies do not visually replicate Normies. Normies is CC0 and
+reproducing pixel patterns would be legally permitted, but the project’s
+conceptual position is that Abnormies record <em>quantities of
+activity</em> through generic spatial language, not the visual content
+of their source. The relationship to Normies is established through:</p>
+<ul>
+<li>Color palette (two shared values: Sky and Nimbostratus, matching
+Normies’ factory off-pixel and on-pixel hex values).</li>
+<li>Canvas dimensions (40×40).</li>
+<li>Naming family.</li>
+<li>Contract-level dependency (Abnormies reads Normies state).</li>
+</ul>
+<p>The relationship is not established through visual mimicry. An
+Abnormie tells you that its seed Normie has been touched and how much,
+never which pixels were touched.</p>
+<h2 id="lineage-and-credit">Lineage and credit</h2>
+<p>Wiiides (Sterling Crispin, NotAudited.xyz, 2022) is the direct
+precedent: a fully on-chain CryptoPunks derivative that reads source
+data and mutates through transfer activity. Abnormies extends this
+lineage into a source collection that is itself mutable (Normies
+customization), adds destructive holder actions (Thunder, Lightning)
+that produce network-wide effects, and adds an agentic ownership
+inversion via Adapter8004. Where Wiiides decays toward stripes,
+Abnormies decay toward ambiguous middle-density.</p>
+<h2 id="source-contracts">Source contracts</h2>
+<p><strong>Normies (ERC-721C):</strong>
+<code>0x9eb6e2025b64f340691e424b7fe7022ffde12438</code> on Ethereum
+mainnet. The wrapper composes two pluggable contracts:</p>
+<ul>
+<li><code>INormiesRenderer</code> produces <code>tokenURI</code>. Not
+used by Abnormies.</li>
+<li><code>INormiesStorage</code> exposes
+<code>getTokenRawImageData</code>, <code>getTokenTraits</code>,
+<code>isTokenDataSet</code>, <code>isRevealed</code>.</li>
+</ul>
+<p>Plus a Canvas contract emitting <code>setTransformBitmap</code>
+events when a Normie is customized. The event history is exposed via the
+Normies API (<code>/history/normie/{id}/versions</code>) and is sourced
+on-chain from the Canvas contract.</p>
+<p><strong>Adapter8004 (Premm, ERC-8217: Agent NFT Identity
+Bindings):</strong> the binding adapter that solves the agent-orphan
+problem inherent to vanilla ERC-8004. Adapter8004 takes permanent
+custody of the agent NFT and binds it to the Normie via on-chain
+metadata. Owning the Normie is owning the agent. Transferring the Normie
+atomically transfers the agent. See <code>adapter8004.xyz</code> for the
+contract and ERC-8217 for the standard.</p>
+<p><strong>Soft dependencies:</strong></p>
+<ul>
+<li>Normies’ renderer and storage contracts are owner-upgradeable
+(<code>setRendererContract</code>,
+<code>setStorageContract</code>).</li>
+<li>Adapter8004 currently has two Normies team wallets registered as a
+safety layer pending multi-sig governance.</li>
+</ul>
+<p>Documented for transparency; mitigations are unnecessary given the
+parties’ reputational stakes.</p>
+<h2 id="source-dependencies-what-abnormies-reads">Source dependencies:
+what Abnormies reads</h2>
+<p>At render time, the Abnormies contract performs the following
+reads:</p>
+<ol type="1">
+<li><strong><code>Normies.ownerOf(normieId)</code></strong>: for the
+agent-ownership inversion check and Living/Dead detection.</li>
+<li><strong><code>setTransformBitmap</code> event count for the seed
+Normie</strong>: used to derive the source Nimbostratus marks. See
+Mutation below. Falls back to the <code>Customized</code> flag from
+<code>getTokenTraits</code> if event scanning proves gas-prohibitive
+(see Source-Mark Fallback below).</li>
+<li><strong>Standard ERC-721 <code>Transfer</code> events</strong> on
+the Normies contract, scoped to the seed Normie, used to count Cirrus
+events.</li>
+<li><strong><code>Adapter8004.bindingOf(normieId)</code></strong> (or
+equivalent): to determine whether the seed Normie has been
+awakened.</li>
+</ol>
+<p>Plus, from Abnormies’ own state:</p>
+<ol start="5" type="1">
+<li><strong>Thunder event log</strong>: emitted by Abnormies
+contract.</li>
+<li><strong>Lightning event log</strong>: emitted by Abnormies
+contract.</li>
+<li><strong>Static records</strong>: per-Abnormie, set when Thunder or
+Lightning freezes the Abnormie.</li>
+</ol>
+<p>The Abnormies contract does <strong>not</strong> read the current
+pixel bitmap (<code>getTokenRawImageData</code>) of any Normie.</p>
+<h2 id="deployment">Deployment</h2>
+<p>Solo. Custom contract deployed by the project. Mint page on
+abnormies.art. No third-party launchpad or platform dependency.</p>
+<h2 id="supply-and-claim">Supply and claim</h2>
+<ul>
+<li>Total supply: 10,000, paired 1:1 with Normies token IDs.</li>
+<li>All 10,000 slots exist as latent claimable positions at deploy.</li>
+</ul>
+<h3 id="random-assignment">Random assignment</h3>
+<p>Claims are 1:1 by quantity, not by token ID. A Normies holder with N
+Normies can claim N Abnormies, but the specific Abnormie token IDs they
+receive are randomly assigned at claim time from the unclaimed pool.
+Dead-source slots are included in the random pool from the start.</p>
+<h3 id="claim-phases">Claim phases</h3>
+<ul>
+<li><strong>Phase 1 (Holder Claim).</strong> Duration: 7 days from
+contract deploy. Normies holders claim 1:1 with Normies held. Cost: gas
+only. Token IDs assigned randomly.</li>
+<li><strong>Phase 2 (Open Mint).</strong> Any address may mint remaining
+unclaimed slots at <strong>0.01 ETH</strong> per Abnormie. Token IDs
+assigned randomly.</li>
+</ul>
+<h2 id="visual-specification">Visual specification</h2>
+<h3 id="layers">Layers</h3>
+<p>40×40 monochrome grid, identical dimensions to Normies. Four-color
+cloud palette:</p>
+<table>
+<colgroup>
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Color</th>
+<th>Hex</th>
+<th>RGB</th>
+<th>Name</th>
+<th>Source</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Lightest</td>
+<td><code>#e3e5e4</code></td>
+<td>227, 229, 228</td>
+<td><strong>Sky</strong></td>
+<td>Untouched, or touched an even number of times (cancelled).</td>
+</tr>
+<tr class="even">
+<td>Light</td>
+<td><code>#b0b1b0</code></td>
+<td>176, 177, 176</td>
+<td><strong>Cirrus</strong></td>
+<td>Mark left by a transfer of the seed Normie.</td>
+</tr>
+<tr class="odd">
+<td>Mid</td>
+<td><code>#7c7d7e</code></td>
+<td>124, 125, 126</td>
+<td><strong>Altocumulus</strong></td>
+<td>Mark left by a Thunder cascade.</td>
+</tr>
+<tr class="even">
+<td>Dark</td>
+<td><code>#48494b</code></td>
+<td>72, 73, 75</td>
+<td><strong>Nimbostratus</strong></td>
+<td>Mark left by a source customization, or by a Lightning cascade.
+Indistinguishable visually; distinguishable in metadata.</td>
+</tr>
+</tbody>
+</table>
+<p>Lightness progression: Sky &gt; Cirrus &gt; Altocumulus &gt;
+Nimbostratus.</p>
+<p>Sky and Nimbostratus match Normies’ factory values exactly.</p>
+<p>Source-customization Nimbostratus and Lightning-cascade Nimbostratus
+share the darkest color by design. Their counts are exposed separately
+in metadata (traits) for sorting and rarity, but no pixel on the
+rendered canvas reveals which event produced it. The ambiguity is the
+point: by the time the canvas is dense enough to read closely, the
+distinction between “what the source authored” and “what the network
+sacrificed onto it” no longer matters at the level of looking.</p>
+<h2 id="mutation-layers-with-cancellation">Mutation: layers with
+cancellation</h2>
+<p>Five event classes contribute to the canvas. Four produce visually
+distinct colors (Cirrus, Altocumulus, source Nimbostratus, Lightning
+Nimbostratus). Source Nimbostratus and Lightning Nimbostratus collapse
+into a single visible color but are tracked separately as events.</p>
+<p>All events use the same touch-accumulation logic. Each event produces
+N random pixel positions on the Abnormie, seeded deterministically.</p>
+<h3 id="cancellation-rule">Cancellation rule</h3>
+<p>Events are processed in chronological order at render time. For each
+pixel position assigned by an event:</p>
+<ol type="1">
+<li>If the position is currently Sky, it takes the event’s color.</li>
+<li>If the position is currently any non-Sky color, the new mark and the
+existing mark cancel: the position reverts to Sky, available for future
+events.</li>
+</ol>
+<p>Every visible non-Sky pixel on an Abnormie has been touched an odd
+number of times. Coverage plateaus at approximately 50%. The endpoint of
+an active history is ambiguous middle-density, neither pristine nor
+saturated.</p>
+<p>There is no layer hierarchy. Any color can cancel any other.</p>
+<h3 id="event-sources">Event sources</h3>
+<h4 id="cirrus-source-normie-transfers">Cirrus: source Normie
+transfers</h4>
+<ul>
+<li><strong>Trigger:</strong> any <code>Transfer</code> event on Normies
+contract for the seed Normie. Mint counts as transfer #1.</li>
+<li><strong>N per event:</strong> 2 pixels.</li>
+<li><strong>Positions:</strong> deterministic, seeded by
+<code>keccak256(normieId, transferIndex, "cirrus")</code>.</li>
+</ul>
+<h4 id="nimbostratus-source-normies-customization-events">Nimbostratus
+(source): Normies customization events</h4>
+<ul>
+<li><strong>Trigger:</strong> each <code>setTransformBitmap</code> event
+on the Normies Canvas contract for the seed Normie.</li>
+<li><strong>N per event:</strong> 3 pixels (default; tunable parameter,
+finalized after visual testing).</li>
+<li><strong>Positions:</strong> deterministic, seeded by
+<code>keccak256(normieId, customizationEventIndex, "nimbostratus-source")</code>.</li>
+</ul>
+<h5 id="source-mark-fallback">Source-Mark Fallback</h5>
+<p>If event scanning proves gas-prohibitive at deploy time, the source
+Nimbostratus layer falls back to a binary signal derived from the
+<code>Customized</code> field in <code>getTokenTraits</code>:</p>
+<ul>
+<li>Customized = false → 0 source Nimbostratus events.</li>
+<li>Customized = true → 1 source Nimbostratus event with a larger pixel
+batch (default 12 pixels), seeded by
+<code>keccak256(normieId, "nimbostratus-source-fallback")</code>.</li>
+</ul>
+<p>The fallback collapses customization fidelity to “ever or never” but
+preserves the binary uncustomized/customized distinction and remains
+fully on-chain.</p>
+<h4 id="nimbostratus-lightning-lightning-cascade">Nimbostratus
+(Lightning): Lightning cascade</h4>
+<ul>
+<li><strong>Trigger:</strong> a Lightning action recorded in Abnormies
+contract.</li>
+<li><strong>N per event:</strong> 1 Nimbostratus pixel per Active
+Abnormie (across the collection).</li>
+<li><strong>Positions:</strong> deterministic, seeded by
+<code>keccak256(lightningBlockhash, targetTokenId)</code>.</li>
+</ul>
+<h4 id="altocumulus-thunder-cascade">Altocumulus: Thunder cascade</h4>
+<ul>
+<li><strong>Trigger:</strong> a Thunder action recorded in Abnormies
+contract.</li>
+<li><strong>N per event:</strong> random integer in range [5, 10] per
+Active Abnormie (across the collection).</li>
+<li><strong>Positions:</strong> deterministic, seeded by
+<code>keccak256(thunderBlockhash, targetTokenId)</code>.</li>
+</ul>
+<h3 id="event-processing-order-at-render-time">Event processing order at
+render time</h3>
+<ol type="1">
+<li>All Cirrus events for the seed Normie, in chronological transfer
+index.</li>
+<li>All source Nimbostratus events (<code>setTransformBitmap</code>), in
+chronological order.</li>
+<li>All Lightning events received, in chronological order from Abnormies
+contract.</li>
+<li>All Thunder events received, in chronological order from Abnormies
+contract.</li>
+</ol>
+<p>Deterministic and reproducible. Anyone can replay the same sequence
+and produce the same canvas.</p>
+<h2 id="state-system">State system</h2>
+<p>Two independent binary axes describe each Abnormie:</p>
+<h3 id="axis-1-mutability">Axis 1: mutability</h3>
+<ul>
+<li><strong>Active</strong>: the Abnormie may still receive new marks
+from any event type that targets it.</li>
+<li><strong>Static</strong>: the Abnormie is frozen. State at the moment
+of becoming Static is permanent. Immune to all future events.
+Terminal.</li>
+</ul>
+<p>An Abnormie becomes Static when chosen as the freeze target of a
+Thunder or Lightning action. The freeze applies before the cascade
+fires, so the newly Static Abnormie receives no contribution from the
+action that froze it.</p>
+<h3 id="axis-2-source-life">Axis 2: source life</h3>
+<ul>
+<li><strong>Living</strong>: the seed Normie is alive and may continue
+to author marks (transfers and customizations).</li>
+<li><strong>Dead</strong>: the seed Normie has been burned. No further
+Cirrus or source Nimbostratus events can ever accrue. The Abnormie may
+still receive Thunder and Lightning cascades while Active.</li>
+</ul>
+<p>An Abnormie transitions from Living to Dead when its seed Normie is
+burned. This is a one-way transition.</p>
+<h3 id="combinations">Combinations</h3>
+<table>
+<colgroup>
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Active</th>
+<th>Living</th>
+<th>Description</th>
+<th>Receives</th>
+<th>Burnable</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Active</td>
+<td>Living</td>
+<td>uncustomized</td>
+<td>Mutates with all five event types</td>
+<td>Thunder, Lightning cascades; Cirrus from transfers (source
+Nimbostratus only when source is customized)</td>
+</tr>
+<tr class="even">
+<td>Active</td>
+<td>Living</td>
+<td>customized</td>
+<td>Mutates with all five event types</td>
+<td>All five</td>
+</tr>
+<tr class="odd">
+<td>Active</td>
+<td>Dead</td>
+<td>n/a</td>
+<td>Mutates with network events only</td>
+<td>Thunder, Lightning cascades. No new Cirrus or source
+Nimbostratus.</td>
+</tr>
+<tr class="even">
+<td>Static</td>
+<td>Living</td>
+<td>n/a</td>
+<td>Frozen. No further marks of any kind.</td>
+<td>None</td>
+</tr>
+<tr class="odd">
+<td>Static</td>
+<td>Dead</td>
+<td>n/a</td>
+<td>Frozen. The doubly-preserved rare category. Frozen during life or
+frozen after death.</td>
+<td>None</td>
+</tr>
+</tbody>
+</table>
+<p>(The “Static + Dead” category absorbs what earlier drafts called
+Posthumous Seal: an Abnormie that was already Dead when chosen as a
+freeze target. Detectable via the <code>Frozen After Death</code> trait
+below.)</p>
+<h2 id="destructive-holder-actions">Destructive holder actions</h2>
+<p>Two burn paths. Each burns the burner’s Abnormie, casts a cascade
+across the network, and freezes one Active Abnormie of the burner’s
+choice.</p>
+<h3 id="thunder-burn-a-dead-abnormie">Thunder: burn a Dead Abnormie</h3>
+<p><strong>Plain instructions:</strong> Burning a Dead Abnormie freezes
+one Active Abnormie of your choice (it becomes Static, permanently
+locked in its current state) and creates a Thunder cascade: 5 to 10
+Altocumulus pixels land on every other Active Abnormie in the
+collection. The frozen Abnormie cannot be one you own.</p>
+<ul>
+<li><strong>Burns:</strong> one Active+Dead Abnormie.</li>
+<li><strong>Freezes:</strong> one Active Abnormie of the burner’s
+choice. Frozen <em>before</em> cascade fires. <strong>Must not be owned
+by burner.</strong></li>
+<li><strong>Cascade:</strong> 5–10 Altocumulus pixels per Active
+Abnormie (excluding the freeze target and the burned Abnormie).</li>
+</ul>
+<h3 id="lightning-burn-a-living-customized-abnormie">Lightning: burn a
+Living, customized Abnormie</h3>
+<p><strong>Plain instructions:</strong> Burning a Living Abnormie whose
+seed Normie has been customized at least once freezes one Active
+Abnormie of your choice (it becomes Static) and creates a Lightning
+cascade: one Nimbostratus pixel lands on every other Active Abnormie in
+the collection. The frozen Abnormie cannot be one you own.</p>
+<ul>
+<li><strong>Burns:</strong> one Active+Living+Customized Abnormie.</li>
+<li><strong>Freezes:</strong> one Active Abnormie of the burner’s
+choice. Frozen <em>before</em> cascade fires. <strong>Must not be owned
+by burner.</strong></li>
+<li><strong>Cascade:</strong> 1 Nimbostratus pixel per Active Abnormie
+(excluding the freeze target and the burned Abnormie).</li>
+</ul>
+<h3 id="the-non-self-freeze-rule">The non-self freeze rule</h3>
+<p><strong>The freeze target must not be owned by the burner.</strong> A
+burner can freeze any Active Abnormie owned by anyone else: strangers,
+friends, opponents. Self-preservation requires either (1) coordination
+with another holder who freezes on your behalf, or (2) moving the
+Abnormie to a side wallet before triggering the burn.</p>
+<p>Rationale: preservation is a relational act in this system. The
+cascades that motivate freezing are involuntary network effects; the
+freeze that absorbs the burner’s “save one” choice is therefore also
+relational by construction. Direct self-preservation is structurally
+impossible. Coordination and wallet-shuffle are explicit escape valves
+and considered legitimate. The rule is enforced at the contract level;
+any attempt to freeze a self-owned Abnormie reverts.</p>
+<h3 id="why-two-action-types">Why two action types</h3>
+<p>Lightning is the long-term Nimbostratus-seeding mechanic: the
+network’s customization analogue, driven by destruction of
+Living-customized Abnormies. Thunder seeds Altocumulus: the network’s
+burn-history layer.</p>
+<ul>
+<li>Altocumulus accumulates from Thunder, fed by Active+Dead supply
+(~1,822 candidates at launch).</li>
+<li>Nimbostratus accumulates from Lightning, fed by
+Active+Living+Customized supply (~300 candidates at launch, growing with
+Normies customization).</li>
+</ul>
+<p>Lightning is rarer and more costly because customized Living
+Abnormies are scarcer. Over time, even Abnormies whose seed Normies were
+never customized will accumulate network-Nimbostratus from Lightning.
+Nimbostratus’s meaning shifts from “what your source authored” to “what
+the network has authored through sacrifice.” Both readings are valid
+simultaneously, and indistinguishable at the level of pixels.</p>
+<h2 id="agent-ownership-inversion-adapter8004">Agent-ownership inversion
+(Adapter8004)</h2>
+<p>When the Abnormie’s owner is also the effective owner of the seed
+Normie’s Adapter8004-bound agent, the canvas inverts at render time.</p>
+<h3 id="why-adapter8004-simplifies-the-check">Why Adapter8004 simplifies
+the check</h3>
+<p>Vanilla ERC-8004 mints a separate agent NFT, allowing the Normie and
+the agent to be owned by different addresses. Adapter8004 (ERC-8217,
+Premm) takes permanent custody of the agent NFT and binds it via
+on-chain metadata to the Normie. Selling the Normie atomically transfers
+control of the agent. <strong>Owning the Normie is owning the
+agent.</strong></p>
+<p>The inversion check reduces to two reads:</p>
+<ol type="1">
+<li>Has the seed Normie been awakened? (Query
+<code>Adapter8004.bindingOf(normieId)</code>.)</li>
+<li>Is
+<code>Abnormies.ownerOf(abnormieId) == Normies.ownerOf(normieId)</code>?</li>
+</ol>
+<p>Both true → inversion. No separate agent-wallet detection needed.</p>
+<h3 id="phase-1-vs-phase-2-alignment">Phase 1 vs Phase 2 alignment</h3>
+<p>In Phase 1 of Normies Awakening (registry only, current), the agent’s
+effective control is the Normie holder’s wallet. In Phase 2 (agent
+wallets, planned), the agent gets its own wallet but Adapter8004’s
+binding guarantees atomic transfer of authority. The same-owner check is
+canonical in Phase 1 and remains correct in Phase 2.</p>
+<h3 id="inversion-rule">Inversion rule</h3>
+<p>For every pixel position on the rendered canvas:</p>
+<ul>
+<li>Sky ↔︎ Nimbostratus (Sky renders as Nimbostratus; Nimbostratus
+renders as Sky)</li>
+<li>Cirrus ↔︎ Altocumulus (Cirrus renders as Altocumulus; Altocumulus
+renders as Cirrus)</li>
+</ul>
+<p>The underlying event history is unchanged. Inversion is a render-time
+transformation, fully reversible. If the owners diverge, the canvas
+returns to normal.</p>
+<h3 id="cases-distinguished">Cases distinguished</h3>
+<ol type="1">
+<li><strong>Different owners</strong> (human owns Abnormie, someone else
+owns seed Normie): normal render.</li>
+<li><strong>Same owner, Normie not awakened</strong> (collector holds
+both but hasn’t registered the Normie through Adapter8004): normal
+render.</li>
+<li><strong>Same owner, Normie awakened</strong> (the autobiographer
+holds its own autobiography): inverted render.</li>
+</ol>
+<h2 id="architecture-summary">Architecture summary</h2>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Mechanic</th>
+<th>Storage cost</th>
+<th>Compute location</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Claim</td>
+<td>1 write per claim</td>
+<td>n/a</td>
+</tr>
+<tr class="even">
+<td>Source Nimbostratus</td>
+<td>0 writes</td>
+<td>Render-time event scan of <code>setTransformBitmap</code></td>
+</tr>
+<tr class="odd">
+<td>Lightning Nimbostratus</td>
+<td>1 write per Lightning event</td>
+<td>Render-time replay</td>
+</tr>
+<tr class="even">
+<td>Cirrus</td>
+<td>0 writes</td>
+<td>Render-time read of Normies <code>Transfer</code> events</td>
+</tr>
+<tr class="odd">
+<td>Altocumulus</td>
+<td>1 write per Thunder event</td>
+<td>Render-time replay</td>
+</tr>
+<tr class="even">
+<td>Freeze (Static)</td>
+<td>Implicit in Thunder or Lightning event</td>
+<td>Render-time check</td>
+</tr>
+<tr class="odd">
+<td>Agent inversion</td>
+<td>0 writes</td>
+<td>Render-time read of Adapter8004 binding + ownership</td>
+</tr>
+<tr class="even">
+<td>Living/Dead state</td>
+<td>0 writes</td>
+<td>Check Normies burn state via <code>ownerOf</code></td>
+</tr>
+</tbody>
+</table>
+<p>No per-token writes for any mutation. The contract holds: ownership
+table, claim assignment, Thunder event log, Lightning event log, claim
+phase state, royalty config.</p>
+<h2 id="royalty-enforcement">Royalty enforcement</h2>
+<p><strong>ERC-721C</strong> (LimitBreak Creator Token Standards),
+matching Normies’ own pattern. Default 2.5% royalty, enforced at the
+contract level; non-compliant marketplaces are blocked from facilitating
+transfers.</p>
+<h2 id="rendering">Rendering</h2>
+<ul>
+<li><strong>Fully on-chain SVG renderer</strong>, computed at view-call
+time. No external image dependencies.</li>
+<li>Token URI format: data URI with embedded SVG, matching Normies’
+format for marketplace compatibility.</li>
+</ul>
+<h3 id="website-abnormies.art">Website (abnormies.art)</h3>
+<ul>
+<li>Wallet connect.</li>
+<li>Static and animated views of any Abnormie.</li>
+<li>Animation playback reads Normies API
+<code>/history/normie/{id}/versions</code> for fine-grained
+customization history. On-chain <code>setTransformBitmap</code> count is
+used for the canonical static state.</li>
+<li>Filter holdings by state combination.</li>
+<li>Thunder and Lightning interfaces, with non-self freeze rule enforced
+in the UI.</li>
+<li>Force-refresh metadata link.</li>
+</ul>
+<p>The canonical visual state lives in the contract. The website is a
+richer presentation layer; the contract is authoritative.</p>
+<h3 id="hosting-and-decentralization">Hosting and decentralization</h3>
+<p>Frontend deployed on Cloudflare Pages (no server-side compute
+needed). Mirrored to IPFS, pointed at via ENS
+(<code>abnormies.eth</code>) as a parallel route. Open-sourced under MIT
+or CC0 so anyone can fork and host an alternative frontend. The artifact
+survives any single deployment.</p>
+<h2 id="traits">Traits</h2>
+<p><strong>State (two axes):</strong> - <strong>Mutability:</strong>
+Active | Static - <strong>Source Life:</strong> Living | Dead</p>
+<p><strong>Source-derived:</strong> - <strong>Source
+Customizations:</strong> integer (count of
+<code>setTransformBitmap</code> events on seed Normie) -
+<strong>Customized:</strong> boolean (Source Customizations ≥ 1) -
+<strong>Source Awakened:</strong> boolean (seed Normie has been
+registered via Adapter8004)</p>
+<p><strong>Recorded:</strong> - <strong>Cirrus Events:</strong> count of
+source Transfer events - <strong>Lightning Events Received:</strong>
+count of Lightning cascade contributions - <strong>Thunder Events
+Received:</strong> count of Thunder cascade contributions -
+<strong>Static At:</strong> block number at which the Abnormie was
+frozen (null if Active) - <strong>Dead At:</strong> block number at
+which the source was burned (null if Living)</p>
+<p><strong>Visible:</strong> - <strong>Visible Cirrus / Altocumulus /
+Nimbostratus:</strong> counts of currently-rendered pixels
+(post-cancellation) - <strong>Total Coverage:</strong> percentage of
+canvas that is non-Sky - <strong>Cancellation Rate:</strong> ratio of
+cancelled touches to total touches</p>
+<p><strong>Action attribution (low-key documented):</strong> -
+<strong>Frozen By:</strong> address of the burner who triggered the
+Thunder or Lightning that froze this Abnormie (null if Active) -
+<strong>Freeze Action:</strong> Thunder | Lightning | null -
+<strong>Frozen After Death:</strong> boolean, true if the Abnormie was
+already Dead at the moment of freezing (the doubly-preserved category,
+rare, occurring only when a burner chooses to freeze an already-Dead
+target)</p>
+<p><strong>Unique:</strong> - <strong>First Static:</strong> boolean,
+true only for the very first Abnormie ever frozen in collection history
+- <strong>Inverted:</strong> boolean, true when the agent-ownership
+inversion is currently active (resolves at render time, can change as
+ownership changes)</p>
+<h2 id="locked-parameters">Locked parameters</h2>
+<ul>
+<li>Source contract:
+<code>0x9eb6e2025b64f340691e424b7fe7022ffde12438</code></li>
+<li>Source standard: ERC-721C (LimitBreak Creator Token Standards)</li>
+<li>Agent adapter: Adapter8004 (Premm, ERC-8217)</li>
+<li>Sky: <code>#e3e5e4</code></li>
+<li>Nimbostratus: <code>#48494b</code></li>
+<li>Cirrus per transfer event: 2 pixels</li>
+<li>Thunder cascade range: 5–10 Altocumulus pixels</li>
+<li>Lightning cascade: 1 Nimbostratus pixel per Active Abnormie</li>
+<li>Source Nimbostratus default per customization event: 3 pixels
+(tunable in prototype)</li>
+<li>Mint counts as transfer #1</li>
+<li>Cancellation rule (any-color collision cancels to Sky)</li>
+<li>Freeze-before-cascade ordering</li>
+<li><strong>Non-self freeze rule</strong> (freeze target must not be
+owned by the burner; enforced at contract level)</li>
+<li>Agent-ownership inversion (Sky↔︎Nimbostratus,
+Cirrus↔︎Altocumulus)</li>
+<li>Thunder and Lightning are the only destructive holder actions</li>
+<li>ERC-721C royalty enforcement, 2.5% default</li>
+</ul>
+<h2 id="out-of-scope">Out of scope</h2>
+<ul>
+<li>Royalty mechanisms beyond ERC-721C with the LimitBreak
+validator.</li>
+<li>Any cryptocurrency, points, or reward mechanic.</li>
+<li>Off-chain artwork or rendering of any kind for canonical state.</li>
+<li>Cross-chain.</li>
+<li>On-chain animation. Abnormies are still images that change between
+blocks. The website’s animated view replays history client-side; it is
+not on-chain animation.</li>
+<li>Third-party deployment platforms.</li>
+<li>Any visual reproduction of Normies pixel patterns.</li>
+<li>Burning Active+Living+Uncustomized Abnormies (no destructive action
+available for them).</li>
+<li>Off-chain indexers for canonical state (only used for website
+animation enhancement).</li>
+<li>Self-freezing (structurally impossible by design).</li>
+</ul>
+<h2 id="naming-and-surface">Naming and surface</h2>
+<ul>
+<li>Collection name: <strong>Abnormies</strong></li>
+<li>Token name: <strong>Abnormie #N</strong></li>
+<li>Layer names: <strong>Sky · Cirrus · Altocumulus ·
+Nimbostratus</strong></li>
+<li>Action names: <strong>Thunder · Lightning</strong></li>
+<li>State axes: <strong>Active / Static · Living / Dead</strong></li>
+<li>Website: <strong>abnormies.art</strong></li>
+</ul>
+<h2 id="changelog">Changelog</h2>
+<ul>
+<li><strong>v0.9</strong>: Naming pass locked. Cloud terminology
+throughout. Layers are Sky / Cirrus / Altocumulus / Nimbostratus.
+Destructive actions are Thunder (burn a Dead Abnormie, Altocumulus
+cascade, plus freeze) and Lightning (burn a Living-customized Abnormie,
+Nimbostratus cascade, plus freeze). State model restructured as two
+independent binary axes: Active/Static (mutability) and Living/Dead
+(source life). Cascades now affect Active Abnormies regardless of
+Living/Dead, so Dead-Active Abnormies continue receiving Thunder and
+Lightning marks until explicitly frozen. The Static+Dead combination
+natively expresses what earlier drafts called Posthumous Seal.
+Plain-language instructions on all destructive actions; cloud
+terminology reserved for layer and action names so users always know
+what an action does. Source-Nimbostratus and Lightning-Nimbostratus
+share the darkest color (visually indistinguishable;
+metadata-separable). Conceptually, the collection also ties into Sean
+Bonner’s forthcoming “Static” photographic series.</li>
+<li><strong>v0.8</strong>: Adapter8004 architecture locked. Simplified
+inversion check. Ink source via <code>setTransformBitmap</code> event
+count with binary fallback. Non-self Sealing rule locked.</li>
+<li><strong>v0.7</strong>: Locked Normies contract address. Initial
+Level-as-Ink-proxy (later corrected to event-count).</li>
+<li><strong>v0.6</strong>: Bleed mechanic added. Agent-ownership
+inversion added.</li>
+<li><strong>v0.5</strong>: XOR pixel cancellation rule. Mint counts as
+transfer #1.</li>
+<li><strong>v0.4</strong>: Visual independence from Normies
+principle.</li>
+<li><strong>v0.3</strong>: Solo deployment. Four-color palette.</li>
+<li><strong>v0.2</strong>: Random claim assignment. Phase 2 mint fee
+0.01 ETH.</li>
+<li><strong>v0.1</strong>: Initial spec.</li>
+</ul>
+
+  </div>
+
+  <hr class="footer-rule">
+  <div class="footer">
+    <a href="index.html">Return to Abnormies</a>
+  </div>
+
+</div>
+
+</body>
+</html>

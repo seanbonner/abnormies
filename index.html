@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Abnormies — Forthcoming</title>
+<meta name="description" content="A fully on-chain derivative collection paired 1:1 with Normies. Forthcoming.">
+<style>
+@font-face {
+  font-family: 'Robotastic';
+  src: url('data:font/ttf;base64,AAEAAAAKAIAAAwAgT1MvMgSWB8oAAAukAAAAYGNtYXAejiBZAAAArAAAAgRnbHlm3jgmngAADCQAABxIaGVhZF8Q/5AAAAKwAAAANmhoZWEDAP59AAAC6AAAACRobXR4QYAEvgAAAwwAAAGYbG9jYQAAR3MAAChsAAABnG1heHAAZv+5AAAEpAAAACBuYW1lZBDrDgAABMQAAAbecG9zdAAC//0AAAwEAAAAIAAAAAIAAAADAAAAFAADAAEAAAEMAAQA+AAAAAgACAACAAAAfiAZIB3//wAAACAgGCAc////4+BK4EgAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAD4AAAACAAIAAIAAAB+IBkgHf//AAAAICAYIBz////j4ErgSAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAQAAHucPyV8PPPUAAAQAAAAAAM9wM0cAAAAAz3AzR//A/4AEQAMAAAAACAACAAEAAAAAAAEAAAMA/4AAAASA/8AAQASAAAEAAAAAAAAAAAAAAAAAAABmAgAAAAAAAAABwAAAAcAAAAEAAEABwABABAAAQAQAAEAEAABAAgAAQAEAAEACQACAAgAAQAIAAEAEAABAAQAAQAQAAEABAABABAAAQAQAAEABAABABAAAQAQAAEAEAABABAAAQAQAAEAEAAAABAAAAAQAAEABAABAAQAAQAKAAEAEAABAAoAAQAQAAEAEAABABAAAQAQAAEAEAABABAAAQAQAAEAEAABABAAAQAQAAEABAABABAAAQAQAAEAEAABABAAAQAQAAEAEAABABAAAQASAAEAEAABABAAAQAQAAEAEAABABAAAQAQAAEAEAABABAAAQAQAAEABgABABAAAQAGAAEACAABABAAAQAEAAEAEAABABAAAQAQAAEAEAABABAAAQAQAAEAEAABABAAAQAEAAEAEAABABAAAQAQAAEAEAABABAAAQAQAAEAEAABABIAAQAQAAEAEAABABAAAQAQAAEAEAABABAAAQAQAAEAEAABABAAAQAGA/8ABAABAAgAAQAQAAEABAABAAQAAQAHAAEABwABAAAEAAABmACAABwAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAiAZ4AAQAAAAAAAAAcAAAAAQAAAAAAAQAKABwAAQAAAAAAAgAHACYAAQAAAAAAAwAVAC0AAQAAAAAABAASAEIAAQAAAAAABQALAFQAAQAAAAAABgAKAF8AAQAAAAAABwA8AGkAAQAAAAAACAAVAKUAAQAAAAAACQANALoAAQAAAAAACgArAMcAAQAAAAAACwAXAPIAAQAAAAAADAAwAQkAAQAAAAAADQAoATkAAQAAAAAADgAuAWEAAQAAAAAAEwApAY8AAQAAAAABAAAIAbgAAwABBAkAAAA4AcAAAwABBAkAAQAUAfgAAwABBAkAAgAOAgwAAwABBAkAAwAqAhoAAwABBAkABAAkAkQAAwABBAkABQAWAmgAAwABBAkABgAUAn4AAwABBAkABwB4ApIAAwABBAkACAAqAwoAAwABBAkACQAaAzQAAwABBAkACgBWA04AAwABBAkACwAuA6QAAwABBAkADABgA9IAAwABBAkADQBQBDIAAwABBAkADgBcBIIAAwABBAkAEwBSBN4AAwABBAkBAAAQBTBDb3B5cmlnaHQgRGFycmVsbCBGbG9vZCAyMDE0Um9ib3Rhc3RpY1JlZ3VsYXJGb250U3RydWN0IFJvYm90YXN0aWNSb2JvdGFzdGljIFJlZ3VsYXJWZXJzaW9uIDEuMFJvYm90YXN0aWNGb250U3RydWN0IGlzIGEgdHJhZGVtYXJrIG9mIEZTSSBGb250U2hvcCBJbnRlcm5hdGlvbmFsIEdtYkhodHRwOi8vZm9udHN0cnVjdC5jb21EYXJyZWxsIEZsb29k4oCcUm9ib3Rhc3RpY+KAnSB3YXMgYnVpbHQgd2l0aCBGb250U3RydWN0Cmh0dHA6Ly93d3cuZm9udHNob3AuY29taHR0cDovL2ZvbnRzdHJ1Y3QuY29tL2ZvbnRzdHJ1Y3Rpb25zL3Nob3cvOTgxNDEzQ3JlYXRpdmUgQ29tbW9ucyBBdHRyaWJ1dGlvbiBTaGFyZSBBbGlrZWh0dHA6Ly9jcmVhdGl2ZWNvbW1vbnMub3JnL2xpY2Vuc2VzL2J5LXNhLzMuMC9GaXZlIGJpZyBxdWFja2luZyB6ZXBoeXJzIGpvbHQgbXkgd2F4IGJlZEN3RUpjVmhuAEMAbwBwAHkAcgBpAGcAaAB0ACAARABhAHIAcgBlAGwAbAAgAEYAbABvAG8AZAAgADIAMAAxADQAUgBvAGIAbwB0AGEAcwB0AGkAYwBSAGUAZwB1AGwAYQByAEYAbwBuAHQAUwB0AHIAdQBjAHQAIABSAG8AYgBvAHQAYQBzAHQAaQBjAFIAbwBiAG8AdABhAHMAdABpAGMAIABSAGUAZwB1AGwAYQByAFYAZQByAHMAaQBvAG4AIAAxAC4AMABSAG8AYgBvAHQAYQBzAHQAaQBjAEYAbwBuAHQAUwB0AHIAdQBjAHQAIABpAHMAIABhACAAdAByAGEAZABlAG0AYQByAGsAIABvAGYAIABGAFMASQAgAEYAbwBuAHQAUwBoAG8AcAAgAEkAbgB0AGUAcgBuAGEAdABpAG8AbgBhAGwAIABHAG0AYgBIAGgAdAB0AHAAOgAvAC8AZgBvAG4AdABzAHQAcgB1AGMAdAAuAGMAbwBtAEQAYQByAHIAZQBsAGwAIABGAGwAbwBvAGQgGgDEAPoAUgBvAGIAbwB0AGEAcwB0AGkAYyAaAMQA+QAgAHcAYQBzACAAYgB1AGkAbAB0ACAAdwBpAHQAaAAgAEYAbwBuAHQAUwB0AHIAdQBjAHQACgBoAHQAdABwADoALwAvAHcAdwB3AC4AZgBvAG4AdABzAGgAbwBwAC4AYwBvAG0AaAB0AHQAcAA6AC8ALwBmAG8AbgB0AHMAdAByAHUAYwB0AC4AYwBvAG0ALwBmAG8AbgB0AHMAdAByAHUAYwB0AGkAbwBuAHMALwBzAGgAbwB3AC8AOQA4ADEANAAxADMAQwByAGUAYQB0AGkAdgBlACAAQwBvAG0AbQBvAG4AcwAgAEEAdAB0AHIAaQBiAHUAdABpAG8AbgAgAFMAaABhAHIAZQAgAEEAbABpAGsAZQBoAHQAdABwADoALwAvAGMAcgBlAGEAdABpAHYAZQBjAG8AbQBtAG8AbgBzAC4AbwByAGcALwBsAGkAYwBlAG4AcwBlAHMALwBiAHkALQBzAGEALwAzAC4AMAAvAEYAaQB2AGUAIABiAGkAZwAgAHEAdQBhAGMAawBpAG4AZwAgAHoAZQBwAGgAeQByAHMAIABqAG8AbAB0ACAAbQB5ACAAdwBhAHgAIABiAGUAZABDAHcARQBKAGMAVgBoAG4AAAACA2cBkAAFAAQCAAIAAAAAAAIAAgAAAAIAADMAzAAAAAAEAAAAAAAAAIAAAAEAAAAAAAAAAAAAAABGU1RSAEAAICAdAoAAAAAAAwAAgAAAAAEAAAAAAoACgAAAACAAAAADAAAAAAAAAGYAMwAAAAAAAAAAAAAAAAAAAAAAAAAAAAUAAAAAAoACgAADAAcACwASABYAAAEBAQEBAQEBAQEBAQEBAQABAAEBAQEBAUAAAP+aAAAAywAA/zUAAABmAAD/mgAAAMsAAP+b/9X/4//iAAD/JgAAAoAAAABaAGYAAP+aAHcAZgAA/5oAdwBmAAD/mgB3AGUAAAAA/+P/4f/X/kECgAAA/YAAAAAAAgBAAAAAwAKAAAMABwAAAQEBAQEBAQEAQAAAAIAAAP+AAAAAgAAAAAAAgAAA/4ABAAGAAAD+gAACAEACAAGAAoAAAwAHAAABAQEBAQEBAQBAAAAAgAAAAEAAAACAAAACAACAAAD/gAAAAIAAAP+AAAIAQAAAA8ACgAADAB8AAAEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAsAAAP6AAAD/gAAA/4AAAACAAAD/gAAAAIAAAACAAAABgAAAAIAAAACAAAD/gAAAAIAAAP+AAAD/gAAA/oAAAAEAAIAAAP+A/wAAgAAAAIAAAACAAAAAgAAAAIAAAP+AAAAAgAAA/4AAAP+AAAD/gAAA/4AAAP+AAAAAgAAA/4AAAwBA/4ADwAMAAAMABwAbAAABAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBA0AAAP8AAAD/gAAA/wAAAAEAAAD+gAAAAYAAAP6AAAABgAAAAIAAAAGAAAD+gAAAAYAAAP6AAAAAgACAAAD/gAEAAIAAAP+A/gAAgAAAAIAAAACAAAABgAAAAIAAAP+AAAD/gAAA/4AAAP6AAAD/gAAAAAMAQAAAA8ACgAADAAcADwAAAQEBAQEBAQEBAQEBAQEBAQJAAAAAgAAA/oAAAACAAAD+gAAAAwAAAACAAAD9AAAAAAAAgAAA/4ACAACAAAD/gP4AAYAAAAEAAAD+gAAA/wAAAAABAEAAgAHAAgAACwAAAQEBAQEBAQEBAQEBAMAAAP+AAAAAgAAAAIAAAACAAAD/gAAAAIAAgAAAAIAAAACAAAD/gAAA/4AAAP+AAAAAAQBAAgAAwAKAAAMAAAEBAQEAQAAAAIAAAAIAAIAAAP+AAAAAAQCA/4ACAAMAAAcAAAEBAQEBAQEBAIAAAAGAAAD/AAAAAQAAAP+AA4AAAP+AAAD9gAAA/4AAAAABAED/gAHAAwAABwAAAQEBAQEBAQEAQAAAAQAAAP8AAAABgAAA/4AAgAAAAoAAAACAAAD8gAAAAAEAQAEAAcACgAALAAABAQEBAQEBAQEBAQEAwAAA/4AAAACAAAAAgAAAAIAAAP+AAAABAACAAAAAgAAAAIAAAP+AAAD/gAAA/4AAAAABAEAAAAPAAoAACwAAAQEBAQEBAQEBAQEBAcAAAP6AAAABgAAAAIAAAAGAAAD+gAAAAAABAAAAAIAAAAEAAAD/AAAA/4AAAP8AAAAAAQBA/4AAwACAAAMAAAEBAQEAQAAAAIAAAP+AAQAAAP8AAAAAAQBAAQADwAGAAAMAAAEBAQEAQAAAA4AAAAEAAIAAAP+AAAAAAQBAAAAAwACAAAMAAAEBAQEAQAAAAIAAAAAAAIAAAP+AAAAABwBA/4ADwAMAAAMABwALAA8AEwAXABsAAAEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEAQAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAP+AAIAAAP+AAIAAgAAA/4AAgACAAAD/gACAAIAAAP+AAIAAgAAA/4AAgACAAAD/gACAAIAAAP+AAAAAAgBAAAADwAKAAAMABwAAAQEBAQEBAQEDQAAA/YAAAP+AAAADgAAAAIABgAAA/oD/gAKAAAD9gAABAEAAAADAAoAAAwAAAQEBAQBAAAAAgAAAAAACgAAA/YAAAAABAEAAAAPAAoAACwAAAQEBAQEBAQEBAQEBAEAAAAMAAAD9AAAAA4AAAP0AAAADAAAAAAABgAAAAIAAAACAAAD+gAAA/4AAAP+AAAAAAQBAAAADwAKAAAsAAAEBAQEBAQEBAQEBAQBAAAADAAAA/QAAAAMAAAD9AAAAA4AAAAAAAIAAAACAAAAAgAAAAIAAAACAAAD9gAAAAAEAQAAAA8ACgAAJAAABAQEBAQEBAQEBA0AAAP0AAAAAgAAAAoAAAACAAAAAAAEAAAABgAAA/wAAAAEAAAD9gAABAEAAAAPAAoAACwAAAQEBAQEBAQEBAQEBAEAAAAMAAAD9AAAAA4AAAP0AAAADAAAAAAAAgAAAAIAAAAGAAAD/gAAA/4AAAP6AAAAAAgBAAAADwAKAAAMACwAAAQEBAQEBAQEBAQEBA0AAAP2AAAD/gAAAA4AAAP0AAAADAAAAAIAAgAAA/4D/gAKAAAD/gAAA/4AAAP6AAAEAAAAAA8ACgAAFAAABAQEBAQEDQAAA/MAAAAPAAAAAAAIAAAAAgAAA/YAAAwAAAAADwAKAAAMABwALAAABAQEBAQEBAQEBAQEDQAAA/UAAAALAAAD9QAAA/4AAAAPAAAAAgACAAAD/gAEAAIAAAP+A/oACgAAA/YAAAAACAEAAAAPAAoAAAwAJAAABAQEBAQEBAQEBA0AAAP2AAAACgAAA/QAAAAOAAAABgACAAAD/gP6AAQAAAAGAAAD9gAAAAAIAQAAAAMACgAADAAcAAAEBAQEBAQEBAEAAAACAAAD/gAAAAIAAAAAAAIAAAP+AAgAAgAAA/4AAAgBA/4AAwAKAAAMABwAAAQEBAQEBAQEAQAAAAIAAAP+AAAAAgAAA/4ABAAAA/wACgACAAAD/gAAHAED/gAJAAwAAAwAHAAsADwATABcAGwAAAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQHAAAAAgAAA/wAAAACAAAD/AAAAAIAAAP8AAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAAgAAA/4AAgAAA/4AAgACAAAD/gACAAIAAAP+AAIAAgAAA/4AAgACAAAD/gACAAIAAAP+AAIAAgAAA/4AAAAACAEAAgAPAAgAAAwAHAAABAQEBAQEBAQBAAAADgAAA/IAAAAOAAAAAgACAAAD/gAEAAIAAAP+AAAcAQP+AAkADAAADAAcACwAPABMAFwAbAAABAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAEAAAACAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAD/AAAAAIAAAP8AAAAAgAAA/wAAAACAAAD/gACAAAD/gACAAIAAAP+AAIAAgAAA/4AAgACAAAD/gACAAIAAAP+AAIAAgAAA/4AAgACAAAD/gAAAAAIAQAAAA8ACgAADAAsAAAEBAQEBAQEBAQEBAQHAAAAAgAAA/4AAAAGAAAD9AAAAA4AAAAAAAIAAAP+AAQAAgAAAAIAAAACAAAD+gAABAEAAAAPAAoAACwAAAQEBAQEBAQEBAQEBAEAAAAOAAAD9gAAAAgAAAP2AAAADAAAAAAACgAAA/oAAAACAAAAAgAAA/oAAAP+AAAAAAgBAAAADwAKAAAMACwAAAQEBAQEBAQEBAQEBA0AAAP2AAAD/gAAAA4AAAP+AAAD9gAAAAYAAgAAA/4D+gAKAAAD9gAAAAQAAAP8AAAEAQAAAA8ACgAAPAAABAQEBAQEBAQEBAQEBAQEBAEAAAAOAAAD/gAAA/YAAAAKAAAD9gAAAAoAAAACAAAAAAAKAAAD/AAAAAIAAAP+AAAD/gAAA/4AAAACAAAD/AAAAAAEAQAAAA8ACgAAHAAABAQEBAQEBAQBAAAADgAAA/QAAAAMAAAAAAAKAAAD/gAAA/oAAAP+AAAAAAgBAAAADwAKAAAMABwAAAQEBAQEBAQEDQAAA/YAAAP+AAAADgAAAAIABgAAA/oD/gAKAAAD9gAABAEAAAAPAAoAACwAAAQEBAQEBAQEBAQEBAEAAAAOAAAD9AAAAAwAAAP0AAAADAAAAAAACgAAA/4AAAP+AAAD/gAAA/4AAAP+AAAAAAQBAAAADwAKAAAkAAAEBAQEBAQEBAQEAQAAAA4AAAP0AAAADAAAA/QAAAAAAAoAAAP+AAAD/gAAA/4AAAP8AAAEAQAAAA8ACgAAJAAABAQEBAQEBAQEBAEAAAAOAAAD9AAAAAoAAAACAAAAAAAKAAAD/gAAA/oAAAAEAAAD+gAABAEAAAAPAAoAACwAAAQEBAQEBAQEBAQEBAEAAAACAAAACgAAAAIAAAP+AAAD9gAAAAAACgAAA/wAAAAEAAAD9gAAAAQAAAP8AAAAAAQBAAAAAwAKAAAMAAAEBAQEAQAAAAIAAAAAAAoAAAP2AAAAAAQBAAAADwAKAAAcAAAEBAQEBAQEBAEAAAAMAAAD9AAAAA4AAAAAAAIAAAAGAAAAAgAAA/YAAAAADAEAAAAPAAoAAAwALAA8AAAEBAQEBAQEBAQEBAQEBAQEDQAAAAIAAAPyAAAAAgAAAAoAAAP2AAAACgAAAAIAAAAAAAQAAAP8AAAACgAAA/wAAAP+AAAD/AAGAAQAAAP8AAAAAAQBAAAADwAKAAAUAAAEBAQEBAQBAAAAAgAAAAwAAAAAAAoAAAP4AAAD/gAABAEAAAAPAAoAACwAAAQEBAQEBAQEBAQEBAEAAAAOAAAD/gAAA/wAAAP+AAAD/AAAAAAACgAAA/YAAAAIAAAD+AAAAAgAAAP4AAAAAAQBAAAADwAKAAAcAAAEBAQEBAQEBAEAAAAOAAAD/gAAA/YAAAAAAAoAAAP2AAAACAAAA/gAAAAACAEAAAAPAAwAAAwALAAABAQEBAQEBAQEBAQEDQAAA/YAAAP+AAAABgAAAAIAAAAGAAAAAgAGAAAD+gP+AAoAAAACAAAD/gAAA/YAAAgBAAAADwAKAAAMACQAAAQEBAQEBAQEBAQNAAAD9gAAA/4AAAAOAAAD9AAAAAYAAgAAA/4D+gAKAAAD+gAAA/wAAAAACAEAAAARAAoAAAwALAAABAQEBAQEBAQEBAQEDQAAA/YAAAP+AAAADgAAAAIAAAP+AAAAAgAGAAAD+gP+AAoAAAP8AAAD/gAAA/wAAAgBAAAADwAKAAAMADwAAAQEBAQEBAQEBAQEBAQEBAQNAAAAAgAAA/IAAAAOAAAD/gAAA/YAAAAKAAAD9gAAAAAABAAAA/wAAAAKAAAD/AAAAAIAAAP+AAAD/gAAA/wAAAQBAAAADwAKAAAsAAAEBAQEBAQEBAQEBAQBAAAADAAAA/QAAAAOAAAD9AAAAAwAAAAAAAIAAAACAAAABgAAA/4AAAP+AAAD+gAAAAAEAQAAAA8ACgAAHAAABAQEBAQEBAQHAAAD+gAAAA4AAAP6AAAAAAAIAAAAAgAAA/4AAAP4AAAAAAQBAAAADwAKAAAcAAAEBAQEBAQEBAEAAAACAAAACgAAAAIAAAAAAAoAAAP4AAAACAAAA/YAAAAADAEAAAAPAAoAAAwAHAAsAAAEBAQEBAQEBAQEBAQDAAAACgAAA/QAAAACAAAACgAAAAIAAAAAAAIAAAP+AAIACAAAA/gAAAAIAAAD+AAAAAAEAQAAAA8ACgAALAAABAQEBAQEBAQEBAQEAQAAAAIAAAAEAAAAAgAAAAQAAAACAAAAAAAKAAAD+AAAAAgAAAP4AAAACAAAA/YAAAAAFAEAAAAPAAoAAAwAHAAsADwATAAABAQEBAQEBAQEBAQEBAQEBAQEBAQBAAAAAgAAAAoAAAACAAAD9AAAAAoAAAP0AAAAAgAAAAoAAAACAAAAAAAEAAAD/AAAAAQAAAP8AAQAAgAAA/4AAgAEAAAD/AAAAAQAAAP8AAAAAAQBAAAADwAKAAAsAAAEBAQEBAQEBAQEBAQHAAAD+gAAAAIAAAAKAAAAAgAAA/oAAAAAAAQAAAAGAAAD/AAAAAQAAAP6AAAD/AAAAAAEAQAAAA8ACgAALAAABAQEBAQEBAQEBAQEAQAAAAwAAAP0AAAADgAAA/QAAAAMAAAAAAAGAAAAAgAAAAIAAAP6AAAD/gAAA/4AAAAABAED/gAFAAwAABwAAAQEBAQEBAQEAQAAAAQAAAP+AAAAAgAAA/4ADgAAA/4AAAP2AAAD/gAAAAAcAQP+AA8ADAAADAAcACwAPABMAFwAbAAABAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBA0AAAACAAAD/AAAAAIAAAP8AAAAAgAAA/wAAAACAAAD/AAAAAIAAAP8AAAAAgAAA/wAAAACAAAD/gACAAAD/gACAAIAAAP+AAIAAgAAA/4AAgACAAAD/gACAAIAAAP+AAIAAgAAA/4AAgACAAAD/gAAAAAEAQP+AAUADAAAHAAABAQEBAQEBAQBAAAAAgAAA/4AAAAEAAAD/gACAAAACgAAAAIAAAPyAAAAAAQBAAYABwAKAAAcAAAEBAQEBAQEBAEAAAAGAAAD/gAAA/4AAAAGAAQAAAP8AAAAAgAAA/4AAAAABAED/gAPAAAAAAwAAAQEBAQBAAAADgAAA/4AAgAAA/4AAAAABAEACAADAAwAAAwAAAQEBAQBAAAAAgAAAAgABAAAA/wAAAAACAEAAAAPAAoAAAwALAAABAQEBAQEBAQEBAQEDQAAA/YAAAP+AAAADgAAA/4AAAP2AAAABgACAAAD/gP6AAoAAAP2AAAABAAAA/wAAAQBAAAADwAKAAA8AAAEBAQEBAQEBAQEBAQEBAQEAQAAAA4AAAP+AAAD9gAAAAoAAAP2AAAACgAAAAIAAAAAAAoAAAP8AAAAAgAAA/4AAAP+AAAD/gAAAAIAAAP8AAAAAAQBAAAADwAKAAAcAAAEBAQEBAQEBAEAAAAOAAAD9AAAAAwAAAAAAAoAAAP+AAAD+gAAA/4AAAAACAEAAAAPAAoAAAwAHAAABAQEBAQEBAQNAAAD9gAAA/4AAAAOAAAAAgAGAAAD+gP+AAoAAAP2AAAEAQAAAA8ACgAALAAABAQEBAQEBAQEBAQEAQAAAA4AAAP0AAAADAAAA/QAAAAMAAAAAAAKAAAD/gAAA/4AAAP+AAAD/gAAA/4AAAAABAEAAAAPAAoAACQAAAQEBAQEBAQEBAQBAAAADgAAA/QAAAAMAAAD9AAAAAAACgAAA/4AAAP+AAAD/gAAA/wAAAQBAAAADwAKAAAkAAAEBAQEBAQEBAQEAQAAAA4AAAP0AAAACgAAAAIAAAAAAAoAAAP+AAAD+gAAAAQAAAP6AAAEAQAAAA8ACgAALAAABAQEBAQEBAQEBAQEAQAAAAIAAAAKAAAAAgAAA/4AAAP2AAAAAAAKAAAD/AAAAAQAAAP2AAAABAAAA/wAAAAABAEAAAADAAoAAAwAAAQEBAQBAAAAAgAAAAAACgAAA/YAAAAABAEAAAAPAAoAABwAAAQEBAQEBAQEAQAAAAwAAAP0AAAADgAAAAAAAgAAAAYAAAACAAAD9gAAAAAMAQAAAA8ACgAADAAsADwAAAQEBAQEBAQEBAQEBAQEBAQNAAAAAgAAA/IAAAACAAAACgAAA/YAAAAKAAAAAgAAAAAABAAAA/wAAAAKAAAD/AAAA/4AAAP8AAYABAAAA/wAAAAABAEAAAAPAAoAABQAAAQEBAQEBAEAAAACAAAADAAAAAAACgAAA/gAAAP+AAAEAQAAAA8ACgAALAAABAQEBAQEBAQEBAQEAQAAAA4AAAP+AAAD/AAAA/4AAAP8AAAAAAAKAAAD9gAAAAgAAAP4AAAACAAAA/gAAAAABAEAAAAPAAoAABwAAAQEBAQEBAQEAQAAAA4AAAP+AAAD9gAAAAAACgAAA/YAAAAIAAAD+AAAAAAIAQAAAA8ADAAADAAsAAAEBAQEBAQEBAQEBAQNAAAD9gAAA/4AAAAGAAAAAgAAAAYAAAACAAYAAAP6A/4ACgAAAAIAAAP+AAAD9gAACAEAAAAPAAoAAAwAJAAABAQEBAQEBAQEBA0AAAP2AAAD/gAAAA4AAAP0AAAABgACAAAD/gP6AAoAAAP6AAAD/AAAAAAIAQAAABEACgAADAAsAAAEBAQEBAQEBAQEBAQNAAAD9gAAA/4AAAAOAAAAAgAAA/4AAAACAAYAAAP6A/4ACgAAA/wAAAP+AAAD/AAACAEAAAAPAAoAAAwAPAAABAQEBAQEBAQEBAQEBAQEBA0AAAACAAAD8gAAAA4AAAP+AAAD9gAAAAoAAAP2AAAAAAAEAAAD/AAAAAoAAAP8AAAAAgAAA/4AAAP+AAAD/AAABAEAAAAPAAoAACwAAAQEBAQEBAQEBAQEBAEAAAAMAAAD9AAAAA4AAAP0AAAADAAAAAAAAgAAAAIAAAAGAAAD/gAAA/4AAAP6AAAAAAQBAAAADwAKAAAcAAAEBAQEBAQEBAcAAAP6AAAADgAAA/oAAAAAAAgAAAACAAAD/gAAA/gAAAAABAEAAAAPAAoAABwAAAQEBAQEBAQEAQAAAAIAAAAKAAAAAgAAAAAACgAAA/gAAAAIAAAD9gAAAAAMAQAAAA8ACgAADAAcACwAAAQEBAQEBAQEBAQEBAMAAAAKAAAD9AAAAAIAAAAKAAAAAgAAAAAAAgAAA/4AAgAIAAAD+AAAAAgAAAP4AAAAAAQBAAAADwAKAAAsAAAEBAQEBAQEBAQEBAQBAAAAAgAAAAQAAAACAAAABAAAAAIAAAAAAAoAAAP4AAAACAAAA/gAAAAIAAAD9gAAAAAUAQAAAA8ACgAADAAcACwAPABMAAAEBAQEBAQEBAQEBAQEBAQEBAQEBAEAAAACAAAACgAAAAIAAAP0AAAACgAAA/QAAAACAAAACgAAAAIAAAAAAAQAAAP8AAAABAAAA/wABAACAAAD/gACAAQAAAP8AAAABAAAA/wAAAAABAEAAAAPAAoAACwAAAQEBAQEBAQEBAQEBAcAAAP6AAAAAgAAAAoAAAACAAAD+gAAAAAABAAAAAYAAAP8AAAABAAAA/oAAAP8AAAAAAQBAAAADwAKAAAsAAAEBAQEBAQEBAQEBAQBAAAADAAAA/QAAAAOAAAD9AAAAAwAAAAAAAYAAAACAAAAAgAAA/oAAAP+AAAD/gAAAAAH/wP+AAUADAAALAAABAQEBAQEBAQEBAQEAQAAA/4AAAACAAAABAAAA/4AAAACAAAD/gAGAAAAAgAAAAYAAAP+AAAD9gAAA/4AAAAABAED/gADAAwAAAwAAAQEBAQBAAAAAgAAA/4ADgAAA/IAAAAABAED/gAHAAwAACwAAAQEBAQEBAQEBAQEBAEAAAACAAAD/gAAAAQAAAACAAAD/gAAA/4AAgAAAAoAAAACAAAD+gAAA/4AAAP6AAAAAAQBAAIADwAIAAAsAAAEBAQEBAQEBAQEBAQBAAAACAAAAAQAAAACAAAD+AAAA/wAAAACAAYAAAP8AAAABAAAA/oAAAAEAAAD/AAAAAAEAQAIAAMACgAADAAABAQEBAEAAAACAAAACAACAAAD/gAAAAAEAQAIAAMACgAADAAABAQEBAEAAAACAAAACAACAAAD/gAAAAAIAQAIAAYACgAADAAcAAAEBAQEBAQEBAEAAAACAAAAAQAAAAIAAAAIAAIAAAP+AAAAAgAAA/4AAAgBAAgABgAKAAAMABwAAAQEBAQEBAQEAQAAAAIAAAABAAAAAgAAAAgAAgAAA/4AAAACAAAD/gAAAAAAAAACMAAAAjAAAAIwAAACMAAAAxAAAAPwAAAGsAAACTAAAArAAAAL8AAADIAAAA1gAAAOQAAAD3AAABCgAAARMAAAEcAAABJQAAAU8AAAFdAAABZgAAAXkAAAGMAAABnAAAAa8AAAHCAAABzQAAAeEAAAHyAAACAAAAAg4AAAI4AAACRgAAAnAAAAKDAAAClgAAAqkAAALBAAACzwAAAt0AAALwAAADAAAAAxAAAAMjAAADLAAAAzoAAANTAAADXgAAA3EAAAN/AAADkgAAA6MAAAO2AAADzgAAA+EAAAPvAAAD/QAABBEAAAQkAAAEQwAABFYAAARpAAAEdwAABKEAAASvAAAEvQAABMYAAATPAAAE4gAABPoAAAUIAAAFFgAABSkAAAU5AAAFSQAABVwAAAVlAAAFcwAABYwAAAWXAAAFqgAABbgAAAXLAAAF3AAABe8AAAYHAAAGGgAABigAAAY2AAAGSgAABl0AAAZ8AAAGjwAABqIAAAa1AAAGvgAABtEAAAbkAAAG7QAABvYAAAcEAAAHEg=') format('truetype');
+  font-display: block;
+}
+
+:root {
+  --bg: #ece8de;
+  --panel: #f4f1e9;
+  --text: #1c1a17;
+  --muted: #6b665e;
+  --border: #c8c2b3;
+  --accent: #8a4f30;
+  --sky: #e3e5e4;
+  --nimbostratus: #48494b;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: Georgia, "Iowan Old Style", "Palatino Linotype", Palatino, "Times New Roman", Times, serif;
+  font-size: 17px;
+  line-height: 1.6;
+}
+
+.wrap {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 80px 32px 60px;
+}
+
+@media (max-width: 600px) {
+  .wrap { padding: 48px 24px 40px; }
+  body { font-size: 16px; }
+}
+
+.wordmark {
+  font-family: 'Robotastic', ui-monospace, monospace;
+  font-size: 64px;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  margin-bottom: 12px;
+  color: var(--text);
+  -webkit-font-smoothing: none;
+  -moz-osx-font-smoothing: unset;
+  font-smooth: never;
+  text-rendering: geometricPrecision;
+}
+
+@media (max-width: 600px) {
+  .wordmark { font-size: 44px; }
+}
+
+.tagline {
+  font-family: 'Robotastic', ui-monospace, monospace;
+  font-size: 14px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 56px;
+  -webkit-font-smoothing: none;
+  -moz-osx-font-smoothing: unset;
+}
+
+.body p {
+  margin-bottom: 1.4em;
+  hyphens: auto;
+}
+
+.body code {
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-size: 0.88em;
+  background: var(--panel);
+  padding: 1px 5px;
+  border: 1px solid var(--border);
+}
+
+.body em {
+  font-style: italic;
+  color: var(--text);
+}
+
+/* Sample viewer */
+
+.sample-block {
+  margin: 48px 0 48px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.canvas-frame {
+  background: #ffffff;
+  border: 1px solid var(--border);
+  padding: 12px;
+  display: inline-block;
+  line-height: 0;
+}
+
+#sample-canvas {
+  display: block;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+.sample-meta {
+  margin-top: 14px;
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  text-align: center;
+}
+
+.sample-meta .meta-id { color: var(--text); font-weight: 600; }
+.sample-meta .meta-state { color: var(--text); }
+.sample-meta .meta-inverted { color: var(--accent); font-weight: 600; }
+
+.sample-controls {
+  margin-top: 14px;
+}
+
+.randomize-btn {
+  font-family: 'Robotastic', ui-monospace, monospace;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  background: transparent;
+  border: 1px solid var(--text);
+  color: var(--text);
+  padding: 9px 18px;
+  cursor: pointer;
+  -webkit-font-smoothing: none;
+  -moz-osx-font-smoothing: unset;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.randomize-btn:hover {
+  background: var(--text);
+  color: var(--bg);
+}
+
+.sample-disclaimer {
+  margin-top: 18px;
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-size: 10px;
+  color: var(--muted);
+  text-align: center;
+  max-width: 380px;
+  line-height: 1.5;
+  letter-spacing: 0.02em;
+}
+
+/* Rest */
+
+.rule {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 56px 0 32px;
+}
+
+.meta {
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.8;
+}
+
+.meta a {
+  color: var(--text);
+  text-decoration: none;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 1px;
+  transition: border-color 0.15s ease;
+}
+
+.meta a:hover {
+  border-bottom-color: var(--accent);
+  color: var(--accent);
+}
+
+.meta .label {
+  display: inline-block;
+  width: 130px;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 10px;
+}
+
+.meta .row {
+  display: flex;
+  align-items: baseline;
+  margin-bottom: 6px;
+}
+
+.meta .row:last-child { margin-bottom: 0; }
+
+.spec-cta {
+  display: inline-block;
+  margin-bottom: 24px;
+  padding: 14px 22px;
+  background: var(--text);
+  color: var(--bg);
+  font-family: 'Robotastic', ui-monospace, monospace;
+  font-size: 13px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  text-decoration: none;
+  border: 1px solid var(--text);
+  -webkit-font-smoothing: none;
+  -moz-osx-font-smoothing: unset;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.spec-cta:hover {
+  background: var(--bg);
+  color: var(--text);
+}
+
+.spec-secondary {
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 32px;
+  margin-top: -8px;
+}
+
+.spec-secondary a {
+  color: var(--text);
+  text-decoration: none;
+  border-bottom: 1px solid var(--border);
+  transition: border-color 0.15s ease;
+}
+
+.spec-secondary a:hover {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <div class="wordmark">ABNORMIES</div>
+  <div class="tagline">Forthcoming</div>
+
+  <div class="body">
+
+    <p>Abnormies is a fully on-chain art collection derived from <em><a href="https://www.normies.art/">NORMIES</a></em> (<a href="https://x.com/serc1n">Serc</a>, 2026), exploring network effects, lack of control, and randomness.</p>
+
+    <p>Each Abnormie has a seed Normie, a specific Normie whose on-chain history shapes the Abnormie's evolution. The Abnormie does not depict its seed Normie. It records, on a 40×40 grid, the consequences of the seed's existence in the network: transfers, customizations, and the destructive choices of other holders. Each Abnormie begins minimal, and all evolve as the network acts on them. Some remain spare; others become dense. None of that activity is authored by the Abnormie's holder, except once, through destruction.</p>
+
+    <p>Every transfer of a seed Normie leaves a mark on its Abnormie. Every customization of the seed leaves a darker mark. Marks cancel on collision. A point touched twice returns to blank. The system rewards activity with visibility, then takes it back as activity continues. Coverage plateaus around fifty percent. The endpoint of an active history is ambiguous middle-density, neither pristine nor saturated.</p>
+
+  </div>
+
+  <div class="sample-block">
+    <div class="canvas-frame">
+      <canvas id="sample-canvas" width="320" height="320"></canvas>
+    </div>
+    <div class="sample-meta" id="sample-meta">&nbsp;</div>
+    <div class="sample-controls">
+      <button class="randomize-btn" id="randomize-btn">Randomize ↻</button>
+    </div>
+    <div class="sample-disclaimer">
+      Example only. Randomly generated client-side to illustrate the visual language. Actual Abnormies are produced at mint time from the on-chain history of their seed Normie and the Abnormies contract's own event log.
+    </div>
+  </div>
+
+  <div class="body">
+
+    <p>Abnormies holders have two destructive actions. Burning an Abnormie whose seed Normie has been destroyed creates Thunder; burning an Abnormie whose seed Normie has been customized creates Lightning. Both cascade marks across the rest of the collection, and both freeze one Abnormie of the burner's choice, locking it permanently in its current state. The frozen Abnormie cannot be one the burner owns. Preservation in this system is relational: something that happens to you, not something you do for yourself. Coordination and wallet transfer are the only routes to self-preservation, and both are legitimate.</p>
+
+    <p>The Normies collection is entering its agent phase via Adapter8004 (ERC-8217, Premm), the binding contract that ties an ERC-8004 agent identity permanently to its underlying NFT. When a seed Normie has been awakened through the adapter and its current owner also holds the corresponding Abnormie, the two are paired. A paired Abnormie inverts at render time. Light becomes dark, dark becomes light. The record reads differently in the hands of the recorded.</p>
+
+    <p>In 2022, <a href="https://x.com/sterlingcrispin">Sterling Crispin</a> published <em><a href="https://wiiides.com/">Wiiides</a></em>, a fully on-chain derivative of CryptoPunks that mutated through transfer activity and decayed toward stripes. CryptoPunks are immutable. Normies are not. Abnormies extend the lineage to a mutable parent, and to a wider range of network events: transfers, customizations, and the destructive choices of other holders. Where Wiiides ended in noise, Abnormies decay toward ambiguity.</p>
+
+    <p>Phase 1: Abnormies will be free to claim (plus gas) for Normies holders for seven days, one Abnormie for each Normie held. Burned Normies will dictate the public allocation. Phase 2: Remaining Abnormies will open minting to the public at a fixed price. This is an art project, there is no presale, no whitelist, no roadmap beyond the specification, once released it runs on it's own forever.</p>
+
+  </div>
+
+  <hr class="rule">
+
+  <a class="spec-cta" href="spec.html">Read the specification →</a>
+  <div class="spec-secondary"><a href="spec.md">Also available as Markdown</a> — machine-readable, for LLMs and agents.</div>
+
+  <div class="meta">
+    <div class="row"><span class="label">Derived from</span><a href="https://etherscan.io/address/0x9eb6e2025b64f340691e424b7fe7022ffde12438">NORMIES (Serc, 2026)</a></div>
+    <div class="row"><span class="label">Lineage</span><a href="https://notaudited.xyz">Wiiides (Sterling Crispin, 2022)</a></div>
+    <div class="row"><span class="label">Agent layer</span><a href="https://adapter8004.xyz">Adapter8004 / ERC-8217 (Premm)</a></div>
+    <div class="row"><span class="label">License</span>CC0</div>
+    <div class="row"><span class="label">Status</span>Draft v0.9 · Pre-deploy</div>
+  </div>
+
+</div>
+
+<script>
+// =============================================================================
+// Sample viewer — random Abnormie generator.
+// Uses Math.random() rather than keccak256; visual is plausible, not canonical.
+// =============================================================================
+
+const SKY = 0, CIRRUS = 1, ALTOCUMULUS = 2, NIMBOSTRATUS = 3;
+const COLORS = ['#e3e5e4', '#b0b1b0', '#7c7d7e', '#48494b'];
+const PIXEL_SIZE = 8;
+
+const canvas = document.getElementById('sample-canvas');
+const ctx = canvas.getContext('2d');
+
+function hashString(str) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  h ^= h >>> 16;
+  h = Math.imul(h, 0x85ebca6b);
+  h ^= h >>> 13;
+  h = Math.imul(h, 0xc2b2ae35);
+  h ^= h >>> 16;
+  return h >>> 0;
+}
+
+function mulberry32(seed) {
+  let t = seed >>> 0;
+  return function() {
+    t = (t + 0x6D2B79F5) >>> 0;
+    let r = t;
+    r = Math.imul(r ^ (r >>> 15), r | 1);
+    r ^= r + Math.imul(r ^ (r >>> 7), r | 61);
+    return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function eventPositions(seedStr, count) {
+  const rng = mulberry32(hashString(seedStr));
+  const positions = [];
+  const seen = new Set();
+  let safety = 0;
+  while (positions.length < count && safety < count * 10) {
+    const p = Math.floor(rng() * 1600);
+    if (!seen.has(p)) {
+      seen.add(p);
+      positions.push(p);
+    }
+    safety++;
+  }
+  return positions;
+}
+
+function thunderCount(normieId, idx) {
+  const rng = mulberry32(hashString(`thunder-count-${normieId}-${idx}`));
+  return 5 + Math.floor(rng() * 6);
+}
+
+function buildGrid(normieId, transfers, customizations, lightnings, thunders, inverted) {
+  const grid = new Uint8Array(1600);
+
+  function apply(positions, color) {
+    for (const p of positions) {
+      grid[p] = grid[p] === SKY ? color : SKY;
+    }
+  }
+
+  for (let i = 0; i < transfers; i++) {
+    apply(eventPositions(`cirrus-${normieId}-${i}`, 2), CIRRUS);
+  }
+  for (let c = 1; c <= customizations; c++) {
+    apply(eventPositions(`nimbo-source-${normieId}-${c}`, 3), NIMBOSTRATUS);
+  }
+  for (let i = 0; i < lightnings; i++) {
+    apply(eventPositions(`lightning-${normieId}-${i}`, 1), NIMBOSTRATUS);
+  }
+  for (let i = 0; i < thunders; i++) {
+    const n = thunderCount(normieId, i);
+    apply(eventPositions(`thunder-${normieId}-${i}`, n), ALTOCUMULUS);
+  }
+
+  if (inverted) {
+    for (let i = 0; i < grid.length; i++) {
+      const c = grid[i];
+      grid[i] = c === SKY ? NIMBOSTRATUS : c === CIRRUS ? ALTOCUMULUS : c === ALTOCUMULUS ? CIRRUS : SKY;
+    }
+  }
+
+  return grid;
+}
+
+function drawGrid(grid) {
+  for (let y = 0; y < 40; y++) {
+    for (let x = 0; x < 40; x++) {
+      const v = grid[y * 40 + x];
+      ctx.fillStyle = COLORS[v];
+      ctx.fillRect(x * PIXEL_SIZE, y * PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE);
+    }
+  }
+}
+
+function rollState() {
+  const r = Math.random();
+  if (r < 0.55) return 'living-active-uncust';
+  if (r < 0.75) return 'living-active-cust';
+  if (r < 0.90) return 'dead-active';
+  if (r < 0.97) return 'static-living';
+  return 'static-dead';
+}
+
+function generateRandom() {
+  const normieId = Math.floor(Math.random() * 10000);
+  const state = rollState();
+  const inverted = Math.random() < 0.08;
+
+  const isCustomized = state.includes('cust');
+  const isStatic = state.startsWith('static');
+
+  const transfers = 1 + Math.floor(Math.random() * 12);
+  const customizations = isCustomized ? (1 + Math.floor(Math.random() * 28)) : 0;
+  const exposureFactor = isStatic ? 0.3 : 1.0;
+  const lightnings = Math.floor(Math.random() * 12 * exposureFactor);
+  const thunders = Math.floor(Math.random() * 4 * exposureFactor);
+
+  return { normieId, state, transfers, customizations, lightnings, thunders, inverted };
+}
+
+function stateLabel(state) {
+  switch (state) {
+    case 'living-active-uncust': return 'Living · Active · Uncustomized';
+    case 'living-active-cust':   return 'Living · Active · Customized';
+    case 'dead-active':          return 'Dead · Active';
+    case 'static-living':        return 'Static · Living';
+    case 'static-dead':          return 'Static · Dead';
+  }
+}
+
+function render(spec) {
+  const grid = buildGrid(
+    spec.normieId, spec.transfers, spec.customizations,
+    spec.lightnings, spec.thunders, spec.inverted
+  );
+  drawGrid(grid);
+
+  let metaParts = [
+    `<span class="meta-id">Seed Normie #${spec.normieId}</span>`,
+    `<span class="meta-state">${stateLabel(spec.state)}</span>`
+  ];
+  if (spec.inverted) {
+    metaParts.push('<span class="meta-inverted">Inverted</span>');
+  }
+  document.getElementById('sample-meta').innerHTML = metaParts.join(' &middot; ');
+}
+
+function randomize() {
+  render(generateRandom());
+}
+
+document.getElementById('randomize-btn').addEventListener('click', randomize);
+randomize();
+
+</script>
+
+</body>
+</html>

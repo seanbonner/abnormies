@@ -1,0 +1,875 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Abnormies — Prototype v0.8</title>
+<style>
+:root {
+  --paper: #e3e5e4;
+  --whisper: #b0b1b0;
+  --trace: #7c7d7e;
+  --ink: #48494b;
+  --bg: #ece8de;
+  --panel: #f4f1e9;
+  --text: #1c1a17;
+  --muted: #6b665e;
+  --border: #c8c2b3;
+  --accent: #8a4f30;
+  --accent-soft: #d4c7b5;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: ui-monospace, "SF Mono", "Cascadia Code", Consolas, "Liberation Mono", monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  min-height: 100vh;
+}
+
+.wrap {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 24px;
+  display: grid;
+  grid-template-columns: 360px 1fr;
+  gap: 24px;
+}
+
+@media (max-width: 1000px) {
+  .wrap { grid-template-columns: 1fr; }
+}
+
+h1 {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 32px;
+  font-weight: 400;
+  letter-spacing: -0.5px;
+  margin-bottom: 4px;
+}
+
+.subtitle {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 20px;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  padding: 18px;
+  margin-bottom: 16px;
+}
+
+.panel h2 {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 15px;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  margin-bottom: 12px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.control { margin-bottom: 14px; }
+.control:last-child { margin-bottom: 0; }
+
+.control label {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
+.control label .val {
+  font-size: 13px;
+  color: var(--text);
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 600;
+}
+
+.control input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent);
+  height: 4px;
+}
+
+.control input[type="number"] {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 6px 8px;
+  font-family: inherit;
+  font-size: 13px;
+}
+
+.control input[type="number"]:focus { outline: 1px solid var(--accent); }
+
+.help {
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 3px;
+  line-height: 1.4;
+}
+
+.help code {
+  background: var(--bg);
+  padding: 1px 4px;
+  font-size: 10px;
+}
+
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  cursor: pointer;
+}
+
+.checkbox-row input { accent-color: var(--accent); }
+
+.checkbox-row .label-text { font-size: 12px; }
+
+.checkbox-row.active .label-text {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.presets {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.preset-btn {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 8px 10px;
+  font-family: inherit;
+  font-size: 11px;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.1s ease;
+}
+
+.preset-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.preset-btn .preset-title {
+  display: block;
+  font-weight: 600;
+}
+
+.preset-btn .preset-desc {
+  display: block;
+  color: var(--muted);
+  font-size: 10px;
+  margin-top: 2px;
+}
+
+.canvas-wrap {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.canvas-frame {
+  background: #ffffff;
+  border: 1px solid var(--border);
+  padding: 16px;
+  display: inline-block;
+}
+
+#canvas {
+  display: block;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+.canvas-label {
+  margin-top: 12px;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.canvas-label .seed { color: var(--text); font-weight: 600; }
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.stat-block {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  padding: 14px;
+}
+
+.stat-block h3 {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 10px;
+  font-weight: 600;
+}
+
+.stat-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 3px 0;
+  font-size: 12px;
+}
+
+.stat-row .swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 6px;
+  vertical-align: middle;
+  border: 1px solid var(--border);
+}
+
+.stat-row .name {
+  display: flex;
+  align-items: center;
+  color: var(--muted);
+}
+
+.stat-row .num {
+  color: var(--text);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.anim-panel {
+  margin-top: 16px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  padding: 16px;
+}
+
+.anim-controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.anim-btn {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 6px 14px;
+  font-family: inherit;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.anim-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.anim-btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #ffffff;
+}
+
+.anim-btn.primary:hover {
+  background: #6a3c25;
+  color: #ffffff;
+}
+
+.anim-speed {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--muted);
+  margin-left: auto;
+}
+
+.anim-speed input {
+  width: 100px;
+  accent-color: var(--accent);
+}
+
+.anim-progress {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  height: 6px;
+  position: relative;
+  margin-bottom: 8px;
+}
+
+.anim-progress-fill {
+  background: var(--accent);
+  height: 100%;
+  width: 0%;
+  transition: width 0.1s linear;
+}
+
+.anim-event {
+  font-size: 11px;
+  color: var(--muted);
+  font-style: italic;
+  min-height: 16px;
+}
+
+.anim-event .event-marker {
+  font-style: normal;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.inversion-badge {
+  display: inline-block;
+  background: var(--accent);
+  color: #fff;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  margin-top: 8px;
+}
+
+.footer-note {
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 20px;
+  padding: 12px;
+  border-top: 1px solid var(--border);
+  line-height: 1.6;
+}
+
+.footer-note strong { color: var(--text); }
+
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <!-- Left: Controls -->
+  <div>
+    <h1>Abnormies</h1>
+    <div class="subtitle">Prototype v0.8 · Renderer Tester</div>
+
+    <div class="panel">
+      <h2>Source</h2>
+      <div class="control">
+        <label>Normie ID <span class="val" id="lbl-id">0</span></label>
+        <input type="number" id="normieId" min="0" max="9999" value="0">
+        <div class="help">Token ID 0–9999. Seeds all deterministic randomness.</div>
+      </div>
+      <div class="control">
+        <label>Source Transfers (Whisper) <span class="val" id="lbl-transfers">1</span></label>
+        <input type="range" id="transfers" min="1" max="200" value="1">
+        <div class="help">Source Normie transfer count. Mint = transfer #1. Each = 2 pixels.</div>
+      </div>
+      <div class="control">
+        <label>Source Customizations <span class="val" id="lbl-cust">0</span></label>
+        <input type="range" id="customizations" min="0" max="100" value="0">
+        <div class="help">Count of <code>setTransformBitmap</code> events on paired Normie. 0 = Dormant. ≥1 = Awake. Each event adds Ink pixels.</div>
+      </div>
+      <div class="control">
+        <label>Ink Pixels per Customization <span class="val" id="lbl-perevent">3</span></label>
+        <input type="range" id="perevent" min="1" max="10" value="3">
+        <div class="help">Calibration parameter. Default 3; tune by visual feel.</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Network Activity</h2>
+      <div class="control">
+        <label>Bleeds Received <span class="val" id="lbl-bleeds">0</span></label>
+        <input type="range" id="bleeds" min="0" max="200" value="0">
+        <div class="help">Awake burns this token received. Each = 1 Ink pixel.</div>
+      </div>
+      <div class="control">
+        <label>Tremors Received <span class="val" id="lbl-tremors">0</span></label>
+        <input type="range" id="tremors" min="0" max="50" value="0">
+        <div class="help">Fossil burns this token received. Each = 5–10 Trace pixels.</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Render Mode</h2>
+      <label class="checkbox-row" id="invert-row">
+        <input type="checkbox" id="invert">
+        <span class="label-text">Agent Inversion <span style="color: var(--muted)">(Paper ↔ Ink, Whisper ↔ Trace)</span></span>
+      </label>
+      <div class="help" style="margin-top: 2px">Active when paired Normie is Adapter8004-awakened and the Abnormie's owner = the Normie's owner.</div>
+    </div>
+
+    <div class="panel">
+      <h2>Presets</h2>
+      <div class="presets">
+        <button class="preset-btn" data-preset="baseline">
+          <span class="preset-title">Pure Baseline</span>
+          <span class="preset-desc">Dormant, never moved</span>
+        </button>
+        <button class="preset-btn" data-preset="freshmint">
+          <span class="preset-title">Fresh Mint</span>
+          <span class="preset-desc">Just minted, Dormant</span>
+        </button>
+        <button class="preset-btn" data-preset="firstcust">
+          <span class="preset-title">First Custom</span>
+          <span class="preset-desc">1 customization, 1 transfer</span>
+        </button>
+        <button class="preset-btn" data-preset="active">
+          <span class="preset-title">Active Customizer</span>
+          <span class="preset-desc">12 customizations, moderate</span>
+        </button>
+        <button class="preset-btn" data-preset="heavycust">
+          <span class="preset-title">Heavy Customizer</span>
+          <span class="preset-desc">40 customizations</span>
+        </button>
+        <button class="preset-btn" data-preset="bleed">
+          <span class="preset-title">Bleed Field</span>
+          <span class="preset-desc">Dormant, many Bleeds</span>
+        </button>
+        <button class="preset-btn" data-preset="tremor">
+          <span class="preset-title">Tremor Field</span>
+          <span class="preset-desc">Heavy Trace cascade</span>
+        </button>
+        <button class="preset-btn" data-preset="latestage">
+          <span class="preset-title">Late Stage</span>
+          <span class="preset-desc">Everything at high</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="footer-note">
+      <strong>How to read this:</strong> Inputs map to on-chain readable signals. Whisper count = source <code>Transfer</code> events. Customizations = <code>setTransformBitmap</code> event count. Bleeds + Tremors = Abnormies contract event log. Everything else (position seeding, XOR cancellation, agent inversion) is render-time computation. Sealed and Fossil state freeze the canvas but don't change visual; not modeled here. Sealing target is constrained to non-self by contract rule (not visible at the single-token prototype level).
+    </div>
+  </div>
+
+  <!-- Right: Canvas + Stats + Animation -->
+  <div>
+    <div class="canvas-wrap">
+      <div class="canvas-frame">
+        <canvas id="canvas" width="480" height="480"></canvas>
+      </div>
+      <div class="canvas-label">
+        Abnormie · Source Normie #<span class="seed" id="seedLabel">0</span>
+        <span id="invBadge" style="display: none" class="inversion-badge">Inverted</span>
+      </div>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-block">
+        <h3>Event Counts</h3>
+        <div class="stat-row"><span class="name">Whisper events</span><span class="num" id="cnt-whisper">0</span></div>
+        <div class="stat-row"><span class="name">Source Ink events</span><span class="num" id="cnt-source-ink">0</span></div>
+        <div class="stat-row"><span class="name">Bleed events</span><span class="num" id="cnt-bleed">0</span></div>
+        <div class="stat-row"><span class="name">Trace events</span><span class="num" id="cnt-trace">0</span></div>
+        <div class="stat-row" style="margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--border)">
+          <span class="name">Total touches</span><span class="num" id="cnt-touches">0</span>
+        </div>
+      </div>
+      <div class="stat-block">
+        <h3>Visible Pixels</h3>
+        <div class="stat-row"><span class="name"><span class="swatch" style="background: var(--paper)"></span>Paper</span><span class="num" id="vis-paper">1600</span></div>
+        <div class="stat-row"><span class="name"><span class="swatch" style="background: var(--whisper)"></span>Whisper</span><span class="num" id="vis-whisper">0</span></div>
+        <div class="stat-row"><span class="name"><span class="swatch" style="background: var(--trace)"></span>Trace</span><span class="num" id="vis-trace">0</span></div>
+        <div class="stat-row"><span class="name"><span class="swatch" style="background: var(--ink)"></span>Ink</span><span class="num" id="vis-ink">0</span></div>
+        <div class="stat-row" style="margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--border)">
+          <span class="name">Coverage</span><span class="num" id="coverage">0.0%</span>
+        </div>
+        <div class="stat-row">
+          <span class="name">Cancellation</span><span class="num" id="cancellation">0.0%</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="anim-panel">
+      <h2 style="font-family: Georgia, serif; font-size: 15px; font-weight: 400; letter-spacing: 0.02em; margin-bottom: 12px; padding-bottom: 6px; border-bottom: 1px solid var(--border)">Animation</h2>
+      <div class="anim-controls">
+        <button class="anim-btn primary" id="play-btn">Play</button>
+        <button class="anim-btn" id="reset-btn">Reset</button>
+        <div class="anim-speed">
+          <span>Speed</span>
+          <input type="range" id="speed" min="1" max="100" value="30">
+          <span id="speedLabel">30ms</span>
+        </div>
+      </div>
+      <div class="anim-progress">
+        <div class="anim-progress-fill" id="progress"></div>
+      </div>
+      <div class="anim-event" id="event-label">Press Play to replay event history in chronological order.</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// =============================================================================
+// Hashing and RNG (deterministic, browser-side approximation of keccak256 logic)
+// =============================================================================
+
+function hashString(str) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  h ^= h >>> 16;
+  h = Math.imul(h, 0x85ebca6b);
+  h ^= h >>> 13;
+  h = Math.imul(h, 0xc2b2ae35);
+  h ^= h >>> 16;
+  return h >>> 0;
+}
+
+function mulberry32(seed) {
+  let t = seed >>> 0;
+  return function() {
+    t = (t + 0x6D2B79F5) >>> 0;
+    let r = t;
+    r = Math.imul(r ^ (r >>> 15), r | 1);
+    r ^= r + Math.imul(r ^ (r >>> 7), r | 61);
+    return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function eventPositions(seedStr, count) {
+  const rng = mulberry32(hashString(seedStr));
+  const positions = [];
+  const seen = new Set();
+  let safety = 0;
+  while (positions.length < count && safety < count * 10) {
+    const p = Math.floor(rng() * 1600);
+    if (!seen.has(p)) {
+      seen.add(p);
+      positions.push(p);
+    }
+    safety++;
+  }
+  return positions;
+}
+
+function tremorPositions(normieId, tremorIndex) {
+  const rng = mulberry32(hashString(`tremor-count-${normieId}-${tremorIndex}`));
+  const count = 5 + Math.floor(rng() * 6); // 5..10 inclusive
+  return eventPositions(`tremor-${normieId}-${tremorIndex}`, count);
+}
+
+// =============================================================================
+// Event composition
+// =============================================================================
+
+const PAPER = 0, WHISPER = 1, TRACE = 2, INK = 3;
+
+function buildEventStream(normieId, transferCount, customizations, pixelsPerCust, bleedCount, tremorCount) {
+  const events = [];
+
+  // 1. Whisper: source transfers. Mint = transfer #1.
+  for (let i = 0; i < transferCount; i++) {
+    events.push({
+      type: 'whisper',
+      color: WHISPER,
+      label: i === 0 ? 'Mint (Whisper #1)' : `Transfer #${i + 1} (Whisper)`,
+      positions: eventPositions(`whisper-${normieId}-${i}`, 2)
+    });
+  }
+
+  // 2. Source Ink: each setTransformBitmap event.
+  for (let c = 1; c <= customizations; c++) {
+    events.push({
+      type: 'source-ink',
+      color: INK,
+      label: `Customization #${c} (Source Ink, ${pixelsPerCust}px)`,
+      positions: eventPositions(`ink-source-${normieId}-${c}`, pixelsPerCust)
+    });
+  }
+
+  // 3. Bleed Ink: 1 pixel per Bleed event.
+  for (let i = 0; i < bleedCount; i++) {
+    events.push({
+      type: 'bleed',
+      color: INK,
+      label: `Bleed #${i + 1} (Ink, 1px)`,
+      positions: eventPositions(`bleed-${normieId}-${i}`, 1)
+    });
+  }
+
+  // 4. Trace: Tremor cascades.
+  for (let i = 0; i < tremorCount; i++) {
+    const positions = tremorPositions(normieId, i);
+    events.push({
+      type: 'tremor',
+      color: TRACE,
+      label: `Tremor #${i + 1} (Trace, ${positions.length}px)`,
+      positions
+    });
+  }
+
+  return events;
+}
+
+function applyEvents(events, upToIndex) {
+  const grid = new Uint8Array(1600);
+  const limit = upToIndex === undefined ? events.length : upToIndex;
+  for (let i = 0; i < limit; i++) {
+    for (const pos of events[i].positions) {
+      if (grid[pos] === PAPER) {
+        grid[pos] = events[i].color;
+      } else {
+        grid[pos] = PAPER;
+      }
+    }
+  }
+  return grid;
+}
+
+function invertGrid(grid) {
+  const out = new Uint8Array(grid.length);
+  for (let i = 0; i < grid.length; i++) {
+    const c = grid[i];
+    out[i] = c === PAPER ? INK : c === WHISPER ? TRACE : c === TRACE ? WHISPER : PAPER;
+  }
+  return out;
+}
+
+// =============================================================================
+// Rendering
+// =============================================================================
+
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const PIXEL_SIZE = 12;
+const COLORS = ['#e3e5e4', '#b0b1b0', '#7c7d7e', '#48494b'];
+
+function drawGrid(grid) {
+  for (let y = 0; y < 40; y++) {
+    for (let x = 0; x < 40; x++) {
+      const v = grid[y * 40 + x];
+      ctx.fillStyle = COLORS[v];
+      ctx.fillRect(x * PIXEL_SIZE, y * PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE);
+    }
+  }
+}
+
+// =============================================================================
+// State & main update loop
+// =============================================================================
+
+const $ = id => document.getElementById(id);
+
+const state = {
+  normieId: 0,
+  transfers: 1,
+  customizations: 0,
+  perevent: 3,
+  bleeds: 0,
+  tremors: 0,
+  invert: false,
+  events: [],
+  animFrame: null,
+  animIndex: 0,
+  animPlaying: false,
+  animSpeed: 30
+};
+
+function readControls() {
+  state.normieId = parseInt($('normieId').value) || 0;
+  state.transfers = parseInt($('transfers').value);
+  state.customizations = parseInt($('customizations').value);
+  state.perevent = parseInt($('perevent').value);
+  state.bleeds = parseInt($('bleeds').value);
+  state.tremors = parseInt($('tremors').value);
+  state.invert = $('invert').checked;
+  state.animSpeed = parseInt($('speed').value);
+}
+
+function updateLabels() {
+  $('lbl-id').textContent = state.normieId;
+  $('lbl-transfers').textContent = state.transfers;
+  $('lbl-cust').textContent = state.customizations;
+  $('lbl-perevent').textContent = state.perevent;
+  $('lbl-bleeds').textContent = state.bleeds;
+  $('lbl-tremors').textContent = state.tremors;
+  $('speedLabel').textContent = state.animSpeed + 'ms';
+  $('seedLabel').textContent = state.normieId;
+  $('invBadge').style.display = state.invert ? 'inline-block' : 'none';
+  $('invert-row').classList.toggle('active', state.invert);
+}
+
+function recompute() {
+  state.events = buildEventStream(
+    state.normieId, state.transfers, state.customizations, state.perevent,
+    state.bleeds, state.tremors
+  );
+  stopAnim();
+  renderAt(state.events.length);
+  updateStats();
+}
+
+function renderAt(eventIndex) {
+  let grid = applyEvents(state.events, eventIndex);
+  if (state.invert) grid = invertGrid(grid);
+  drawGrid(grid);
+}
+
+function updateStats() {
+  const counts = { whisper: 0, sourceInk: 0, bleed: 0, trace: 0 };
+  let totalTouches = 0;
+  for (const ev of state.events) {
+    if (ev.type === 'whisper') counts.whisper++;
+    else if (ev.type === 'source-ink') counts.sourceInk++;
+    else if (ev.type === 'bleed') counts.bleed++;
+    else if (ev.type === 'tremor') counts.trace++;
+    totalTouches += ev.positions.length;
+  }
+  $('cnt-whisper').textContent = counts.whisper;
+  $('cnt-source-ink').textContent = counts.sourceInk;
+  $('cnt-bleed').textContent = counts.bleed;
+  $('cnt-trace').textContent = counts.trace;
+  $('cnt-touches').textContent = totalTouches;
+
+  const finalGrid = applyEvents(state.events);
+  const vis = [0, 0, 0, 0];
+  for (let i = 0; i < finalGrid.length; i++) vis[finalGrid[i]]++;
+  $('vis-paper').textContent = vis[PAPER];
+  $('vis-whisper').textContent = vis[WHISPER];
+  $('vis-trace').textContent = vis[TRACE];
+  $('vis-ink').textContent = vis[INK];
+
+  const nonPaper = vis[WHISPER] + vis[TRACE] + vis[INK];
+  $('coverage').textContent = (100 * nonPaper / 1600).toFixed(1) + '%';
+  const cancelRate = totalTouches === 0 ? 0 : (totalTouches - nonPaper) / totalTouches;
+  $('cancellation').textContent = (cancelRate * 100).toFixed(1) + '%';
+}
+
+// =============================================================================
+// Animation
+// =============================================================================
+
+function stopAnim() {
+  if (state.animFrame) {
+    clearTimeout(state.animFrame);
+    state.animFrame = null;
+  }
+  state.animPlaying = false;
+  $('play-btn').textContent = 'Play';
+}
+
+function startAnim() {
+  if (state.events.length === 0) return;
+  state.animPlaying = true;
+  $('play-btn').textContent = 'Pause';
+  stepAnim();
+}
+
+function stepAnim() {
+  if (!state.animPlaying) return;
+  state.animIndex++;
+  if (state.animIndex > state.events.length) {
+    stopAnim();
+    state.animIndex = state.events.length;
+    return;
+  }
+  renderAt(state.animIndex);
+  $('progress').style.width = (100 * state.animIndex / state.events.length) + '%';
+  if (state.animIndex > 0) {
+    const ev = state.events[state.animIndex - 1];
+    $('event-label').innerHTML = `<span class="event-marker">${state.animIndex} / ${state.events.length}</span> · ${ev.label}`;
+  }
+  state.animFrame = setTimeout(stepAnim, state.animSpeed);
+}
+
+$('play-btn').addEventListener('click', () => {
+  if (state.animPlaying) {
+    stopAnim();
+  } else {
+    if (state.animIndex >= state.events.length) {
+      state.animIndex = 0;
+      $('progress').style.width = '0%';
+    }
+    startAnim();
+  }
+});
+
+$('reset-btn').addEventListener('click', () => {
+  stopAnim();
+  state.animIndex = 0;
+  $('progress').style.width = '0%';
+  $('event-label').textContent = 'Press Play to replay event history in chronological order.';
+  renderAt(state.events.length);
+});
+
+// =============================================================================
+// Presets
+// =============================================================================
+
+const PRESETS = {
+  baseline:  { transfers: 1,   customizations: 0,  bleeds: 0,   tremors: 0,  invert: false },
+  freshmint: { transfers: 1,   customizations: 0,  bleeds: 0,   tremors: 0,  invert: false },
+  firstcust: { transfers: 1,   customizations: 1,  bleeds: 0,   tremors: 0,  invert: false },
+  active:    { transfers: 12,  customizations: 12, bleeds: 0,   tremors: 0,  invert: false },
+  heavycust: { transfers: 20,  customizations: 40, bleeds: 0,   tremors: 0,  invert: false },
+  bleed:     { transfers: 4,   customizations: 0,  bleeds: 80,  tremors: 0,  invert: false },
+  tremor:    { transfers: 4,   customizations: 0,  bleeds: 0,   tremors: 15, invert: false },
+  latestage: { transfers: 50,  customizations: 60, bleeds: 60,  tremors: 20, invert: false }
+};
+
+document.querySelectorAll('.preset-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const p = PRESETS[btn.dataset.preset];
+    if (!p) return;
+    $('transfers').value = p.transfers;
+    $('customizations').value = p.customizations;
+    $('bleeds').value = p.bleeds;
+    $('tremors').value = p.tremors;
+    $('invert').checked = p.invert;
+    onChange();
+  });
+});
+
+// =============================================================================
+// Wiring
+// =============================================================================
+
+function onChange() {
+  readControls();
+  updateLabels();
+  recompute();
+}
+
+['normieId', 'transfers', 'customizations', 'perevent', 'bleeds', 'tremors', 'invert', 'speed']
+  .forEach(id => {
+    $(id).addEventListener('input', onChange);
+    $(id).addEventListener('change', onChange);
+  });
+
+onChange();
+
+</script>
+</body>
+</html>
