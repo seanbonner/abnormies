@@ -13,7 +13,6 @@ You manage the git repo and Cloudflare deployment. Sean authors site content in 
 | `index.html` | Public teaser. Front door of the site. |
 | `spec.html` | Specification rendered for browsers. |
 | `spec.md` | Specification in markdown (machine-readable, for LLMs and agents). |
-| `prototype.html` | Interactive renderer test tool. Developer-facing; included in deploy at `/prototype.html`. |
 | `_headers` | Cloudflare Pages header overrides. |
 | `README.md` | Minimal repo description (public-facing on GitHub). |
 | `CLAUDE.md` | This file. Your standing context. |

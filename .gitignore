@@ -5,3 +5,4 @@
 .env.local
 node_modules/
 .wrangler/
+prototype.html
