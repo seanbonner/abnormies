@@ -96,6 +96,19 @@ body {
   color: var(--text);
 }
 
+.body a {
+  color: var(--text);
+  text-decoration: none;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 1px;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.body a:hover {
+  border-bottom-color: var(--accent);
+  color: var(--accent);
+}
+
 /* Sample viewer */
 
 .sample-block {

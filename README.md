@@ -9,6 +9,7 @@ Live: https://abnormies.art
 - `index.html` — overview
 - `spec.html` — specification (browser-readable)
 - `spec.md` — specification (machine-readable, source of truth)
+- `prototype.html` — interactive renderer test tool
 - `_headers` — Cloudflare Pages headers configuration
 
 Smart contracts and minting UI will live in separate repositories. Forthcoming.
