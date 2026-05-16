@@ -1,0 +1,15 @@
+# Abnormies
+
+> A fully on-chain art collection derived from Normies (Serc, 2026), exploring network effects, lack of control, and randomness.
+
+Abnormies is paired 1:1 with Normies. Each Abnormie has a seed Normie whose on-chain history shapes its evolution. Marks accumulate on a 40×40 grid from transfers, customizations, and the destructive actions of other holders. Marks cancel on collision. Coverage plateaus around fifty percent. The author is the network.
+
+## Documentation
+
+- [Specification (markdown)](https://abnormies.art/spec.md): Canonical project spec, machine-readable.
+- [Specification (HTML)](https://abnormies.art/spec.html): Same spec, browser-rendered.
+- [Overview](https://abnormies.art/): Public-facing introduction.
+
+## Status
+
+Site is live. Smart contracts are forthcoming.
