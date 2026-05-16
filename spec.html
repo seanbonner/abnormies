@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Abnormies — Specification</title>
-<meta name="description" content="Abnormies — Production specification, draft v0.9.">
+<meta name="description" content="Abnormies — Production specification, draft v0.10.">
 <style>
 @font-face {
   font-family: 'Robotastic';
@@ -258,7 +258,7 @@ body {
   <a href="index.html" class="back-link">← Abnormies</a>
 
   <div class="wordmark">SPECIFICATION</div>
-  <div class="subtitle">Draft v0.9 · Pre-deploy</div>
+  <div class="subtitle">Draft v0.10 · Pre-deploy</div>
 
   <div class="spec">
 <p><em>Co-authored with Claude Opus 4.7. This document may contain
@@ -312,27 +312,48 @@ that produce network-wide effects, and adds an agentic ownership
 inversion via Adapter8004. Where Wiiides decays toward stripes,
 Abnormies decay toward ambiguous middle-density.</p>
 <h2 id="source-contracts">Source contracts</h2>
-<p><strong>Normies (ERC-721C):</strong>
+<p>The architecture below has been verified through direct source code
+inspection, official API documentation, and primary-source
+announcements. The Abnormies design relies on these confirmed
+properties.</p>
+<p><strong>Normies (ERC-721C):</strong> Contract at
 <code>0x9eb6e2025b64f340691e424b7fe7022ffde12438</code> on Ethereum
-mainnet. The wrapper composes two pluggable contracts:</p>
+mainnet. Verified by reading contract source. Inherits the LimitBreak
+Creator Token Standards (ERC-721C). The wrapper composes two pluggable
+contracts:</p>
 <ul>
 <li><code>INormiesRenderer</code> produces <code>tokenURI</code>. Not
 used by Abnormies.</li>
 <li><code>INormiesStorage</code> exposes
 <code>getTokenRawImageData</code>, <code>getTokenTraits</code>,
-<code>isTokenDataSet</code>, <code>isRevealed</code>.</li>
+<code>isTokenDataSet</code>, <code>isRevealed</code>. Confirmed by
+interface inspection.</li>
 </ul>
-<p>Plus a Canvas contract emitting <code>setTransformBitmap</code>
-events when a Normie is customized. The event history is exposed via the
-Normies API (<code>/history/normie/{id}/versions</code>) and is sourced
-on-chain from the Canvas contract.</p>
+<p>Plus a Canvas contract that emits
+<code>setTransformBitmap(uint256 tokenId, bytes data)</code> on each
+customization. Event existence confirmed by Canvas contract source.
+Event history is also exposed via the Normies API
+(<code>/history/normie/{id}/versions</code>); the on-chain event log is
+canonical.</p>
+<p>Burns follow the standard <code>_burn()</code> pattern with transfer
+to <code>address(0)</code>, enabling Dead-source detection via
+<code>ownerOf</code> reverting or returning the zero address. Total
+supply: 10,000. License: CC0.</p>
 <p><strong>Adapter8004 (Premm, ERC-8217: Agent NFT Identity
-Bindings):</strong> the binding adapter that solves the agent-orphan
-problem inherent to vanilla ERC-8004. Adapter8004 takes permanent
-custody of the agent NFT and binds it to the Normie via on-chain
-metadata. Owning the Normie is owning the agent. Transferring the Normie
-atomically transfers the agent. See <code>adapter8004.xyz</code> for the
-contract and ERC-8217 for the standard.</p>
+Bindings):</strong> Deployed at <code>adapter8004.xyz</code>. Verified
+in production by Serc’s “Normies Awakening” announcement (May 15, 2026)
+and by direct use. The adapter takes permanent custody of the ERC-8004
+agent NFT and binds it to the underlying NFT via on-chain metadata.
+Owning the Normie is owning the agent. Transferring the Normie
+atomically transfers the agent. The exact function signature for binding
+lookup is pending direct contract inspection; the spec assumes
+<code>bindingOf(normieId)</code> or equivalent.</p>
+<p><strong>Normies API:</strong> Public read endpoints at
+<code>api.normies.art</code>, no authentication required. Confirmed
+working. The Abnormies contract does not depend on the API; canonical
+state is read on-chain via standard cross-contract calls and event log
+reads. The Abnormies website uses the API for animation playback
+enhancement only.</p>
 <p><strong>Soft dependencies:</strong></p>
 <ul>
 <li>Normies’ renderer and storage contracts are owner-upgradeable
@@ -345,34 +366,75 @@ safety layer pending multi-sig governance.</li>
 parties’ reputational stakes.</p>
 <h2 id="source-dependencies-what-abnormies-reads">Source dependencies:
 what Abnormies reads</h2>
-<p>At render time, the Abnormies contract performs the following
-reads:</p>
+<p>The EVM does not allow a view function to iterate past event logs on
+another contract. The Abnormies renderer reads contract state only.
+State that derives from external events (seed Normie transfers, seed
+Normie customizations) is maintained by Abnormies in stored counters
+that advance via permissionless write transactions.</p>
+<p>External state reads at render time:</p>
 <ol type="1">
-<li><strong><code>Normies.ownerOf(normieId)</code></strong>: for the
-agent-ownership inversion check and Living/Dead detection.</li>
-<li><strong><code>setTransformBitmap</code> event count for the seed
-Normie</strong>: used to derive the source Nimbostratus marks. See
-Mutation below. Falls back to the <code>Customized</code> flag from
-<code>getTokenTraits</code> if event scanning proves gas-prohibitive
-(see Source-Mark Fallback below).</li>
-<li><strong>Standard ERC-721 <code>Transfer</code> events</strong> on
-the Normies contract, scoped to the seed Normie, used to count Cirrus
-events.</li>
+<li><strong><code>Normies.ownerOf(normieId)</code></strong>: for
+Living/Dead detection and the ownership comparison used by the inversion
+check.</li>
 <li><strong><code>Adapter8004.bindingOf(normieId)</code></strong> (or
 equivalent): to determine whether the seed Normie has been
 awakened.</li>
+<li><strong><code>Abnormies.ownerOf(abnormieId)</code></strong>: for the
+ownership comparison used by the inversion check.</li>
 </ol>
-<p>Plus, from Abnormies’ own state:</p>
-<ol start="5" type="1">
-<li><strong>Thunder event log</strong>: emitted by Abnormies
-contract.</li>
-<li><strong>Lightning event log</strong>: emitted by Abnormies
-contract.</li>
-<li><strong>Static records</strong>: per-Abnormie, set when Thunder or
-Lightning freezes the Abnormie.</li>
+<p>Internal state reads at render time:</p>
+<ol start="4" type="1">
+<li><strong><code>cirrusCount[normieId]</code></strong>: count of seed
+Normie owner changes observed since claim. Advanced by
+<code>pokeSeed</code>.</li>
+<li><strong><code>seedCustomized[normieId]</code></strong>: boolean,
+true once the seed Normie’s Customized flag has been observed as true.
+Advanced by <code>pokeSeed</code>.</li>
+<li><strong><code>lightningsReceived[abnormieId]</code></strong> and
+<strong><code>thundersReceived[abnormieId]</code></strong>: count of
+cascade contributions. Advanced inline by Lightning and Thunder
+actions.</li>
+<li><strong><code>isStatic[abnormieId]</code></strong>: frozen flag. Set
+inline when the Abnormie is chosen as a freeze target.</li>
+<li><strong><code>seedBurned[normieId]</code></strong>: cached burn
+state. Set by <code>pokeSeed</code> when <code>Normies.ownerOf</code>
+reverts or returns zero.</li>
 </ol>
-<p>The Abnormies contract does <strong>not</strong> read the current
-pixel bitmap (<code>getTokenRawImageData</code>) of any Normie.</p>
+<h3 id="state-advancement">State advancement</h3>
+<ul>
+<li><strong><code>pokeSeed(normieId)</code></strong>: permissionless
+external function. Reads <code>Normies.ownerOf</code> and
+<code>INormiesStorage.getTokenTraits</code>. If the owner has changed
+since the last poke, increments <code>cirrusCount</code>. If the
+Customized flag has flipped from false to true, sets
+<code>seedCustomized</code>. If <code>ownerOf</code> reverts or returns
+zero, sets <code>seedBurned</code>. Anyone can call this. Marketplace
+bidders, the Abnormie’s holder, and indexers are natural callers.</li>
+<li><strong><code>Abnormies._beforeTokenTransfer</code>
+override</strong>: auto-invokes <code>pokeSeed</code> for the
+transferring Abnormie’s seed. Free polling whenever an Abnormie moves
+between wallets.</li>
+<li><strong>Thunder and Lightning actions</strong>: update global
+cascade counters in the action transaction. Per-Abnormie cascade counts
+are computed at render time from global counters and per-Abnormie
+creation/freeze indices, so per-cascade writes do not scale with
+collection size.</li>
+<li><strong>Phase 1 claim</strong>: a merkle commitment computed
+off-chain at the deploy block records each seed Normie’s initial owner,
+Customized flag, and burn status. Each claim verifies a merkle proof
+against the published root and initializes the relevant counters from
+the snapshot.</li>
+</ul>
+<p>The Abnormies contract does not read the current pixel bitmap
+(<code>getTokenRawImageData</code>) of any Normie.</p>
+<h3 id="render-time-freshness">Render-time freshness</h3>
+<p>Stored counters are current as of the most recent
+<code>pokeSeed</code> call for a given seed. A seed Normie that
+transferred several times since its last poke shows the same Cirrus
+count as if nothing had happened, until someone pokes it. The Abnormie’s
+holder, a marketplace bidder, or an indexer can poke at any time.
+Auto-polling on Abnormie transfer guarantees the canvas refreshes
+whenever the Abnormie itself moves.</p>
 <h2 id="deployment">Deployment</h2>
 <p>Solo. Custom contract deployed by the project. Mint page on
 abnormies.art. No third-party launchpad or platform dependency.</p>
@@ -481,71 +543,90 @@ an active history is ambiguous middle-density, neither pristine nor
 saturated.</p>
 <p>There is no layer hierarchy. Any color can cancel any other.</p>
 <h3 id="event-sources">Event sources</h3>
-<h4 id="cirrus-source-normie-transfers">Cirrus: source Normie
-transfers</h4>
+<h4 id="cirrus-seed-normie-owner-changes">Cirrus: seed Normie owner
+changes</h4>
 <ul>
-<li><strong>Trigger:</strong> any <code>Transfer</code> event on Normies
-contract for the seed Normie. Mint counts as transfer #1.</li>
-<li><strong>N per event:</strong> 2 pixels.</li>
+<li><strong>Trigger:</strong> an owner change on the seed Normie’s
+Normies record, observed via a <code>pokeSeed</code> call. The
+deploy-block owner counts as observation #1, committed in the Phase 1
+merkle root.</li>
+<li><strong>N per observation:</strong> 2 pixels.</li>
 <li><strong>Positions:</strong> deterministic, seeded by
-<code>keccak256(normieId, transferIndex, "cirrus")</code>.</li>
+<code>keccak256(normieId, observationIndex, "cirrus")</code>.</li>
 </ul>
-<h4 id="nimbostratus-source-normies-customization-events">Nimbostratus
-(source): Normies customization events</h4>
+<p><code>pokeSeed</code> compares the current
+<code>Normies.ownerOf(normieId)</code> to the last owner this contract
+recorded. If they differ, the observation count increments and the new
+owner is stored. Multiple transfers that return to the same wallet
+between pokes count as a single change; wash trades back to the same
+wallet produce no visual signal. In practice this approximates transfer
+count well at the level of granularity the canvas can render.</p>
+<h4 id="nimbostratus-source-seed-normie-customization">Nimbostratus
+(source): seed Normie customization</h4>
 <ul>
-<li><strong>Trigger:</strong> each <code>setTransformBitmap</code> event
-on the Normies Canvas contract for the seed Normie.</li>
-<li><strong>N per event:</strong> 3 pixels (default; tunable parameter,
-finalized after visual testing).</li>
+<li><strong>Trigger:</strong> the <code>Customized</code> flag in
+<code>INormiesStorage.getTokenTraits(normieId)</code> flips from false
+to true on the seed Normie, observed via <code>pokeSeed</code>.</li>
+<li><strong>N per event:</strong> 12 pixels.</li>
 <li><strong>Positions:</strong> deterministic, seeded by
-<code>keccak256(normieId, customizationEventIndex, "nimbostratus-source")</code>.</li>
+<code>keccak256(normieId, "nimbostratus-source")</code>.</li>
 </ul>
-<h5 id="source-mark-fallback">Source-Mark Fallback</h5>
-<p>If event scanning proves gas-prohibitive at deploy time, the source
-Nimbostratus layer falls back to a binary signal derived from the
-<code>Customized</code> field in <code>getTokenTraits</code>:</p>
-<ul>
-<li>Customized = false → 0 source Nimbostratus events.</li>
-<li>Customized = true → 1 source Nimbostratus event with a larger pixel
-batch (default 12 pixels), seeded by
-<code>keccak256(normieId, "nimbostratus-source-fallback")</code>.</li>
-</ul>
-<p>The fallback collapses customization fidelity to “ever or never” but
-preserves the binary uncustomized/customized distinction and remains
-fully on-chain.</p>
+<p>This is a single binary signal per seed: customized or not. Once
+<code>seedCustomized[normieId]</code> is true, no further source
+Nimbostratus marks accrue from the seed. Lightning cascades produce
+additional Nimbostratus pixels through a separate mechanism.</p>
+<p>The Customized state at the deploy snapshot block is committed in the
+Phase 1 merkle root. Post-snapshot customizations advance the counter
+via permissionless pokes. The EVM does not permit per-customization
+event counting from a view function, so the layer collapses to a binary
+signal by design.</p>
 <h4 id="nimbostratus-lightning-lightning-cascade">Nimbostratus
 (Lightning): Lightning cascade</h4>
 <ul>
-<li><strong>Trigger:</strong> a Lightning action recorded in Abnormies
-contract.</li>
+<li><strong>Trigger:</strong> a Lightning action recorded in the
+Abnormies contract. The global Lightning counter increments.</li>
 <li><strong>N per event:</strong> 1 Nimbostratus pixel per Active
 Abnormie (across the collection).</li>
 <li><strong>Positions:</strong> deterministic, seeded by
-<code>keccak256(lightningBlockhash, targetTokenId)</code>.</li>
+<code>keccak256(abnormieId, globalLightningIndex, "nimbostratus-lightning")</code>.</li>
 </ul>
+<p>An Abnormie’s received-Lightning range is computed from its mint-time
+Lightning counter and either the current global counter (if Active) or
+its freeze-time Lightning counter (if Static). Per-Abnormie writes are
+not required on each Lightning action; only the global counter
+increments and the burner’s Abnormie is burned.</p>
 <h4 id="altocumulus-thunder-cascade">Altocumulus: Thunder cascade</h4>
 <ul>
-<li><strong>Trigger:</strong> a Thunder action recorded in Abnormies
-contract.</li>
-<li><strong>N per event:</strong> random integer in range [5, 10] per
-Active Abnormie (across the collection).</li>
+<li><strong>Trigger:</strong> a Thunder action recorded in the Abnormies
+contract. The global Thunder counter increments.</li>
+<li><strong>N per event:</strong> integer in range [5, 10] per Active
+Abnormie, derived from
+<code>keccak256(abnormieId, globalThunderIndex, "thunder-count") % 6 + 5</code>.</li>
 <li><strong>Positions:</strong> deterministic, seeded by
-<code>keccak256(thunderBlockhash, targetTokenId)</code>.</li>
+<code>keccak256(abnormieId, globalThunderIndex, "altocumulus-thunder")</code>.</li>
 </ul>
+<p>An Abnormie’s received-Thunder range is computed from its mint-time
+Thunder counter and either the current global counter (if Active) or its
+freeze-time Thunder counter (if Static). Per-Abnormie writes are not
+required on each Thunder action.</p>
 <h3 id="event-processing-order-at-render-time">Event processing order at
 render time</h3>
+<p>The renderer iterates events in a fixed type-then-index order,
+generating deterministic positions from stored counters:</p>
 <ol type="1">
-<li>All Cirrus events for the seed Normie, in chronological transfer
-index.</li>
-<li>All source Nimbostratus events (<code>setTransformBitmap</code>), in
-chronological order.</li>
-<li>All Lightning events received, in chronological order from Abnormies
-contract.</li>
-<li>All Thunder events received, in chronological order from Abnormies
-contract.</li>
+<li><code>cirrusCount[normieId]</code> Cirrus observations, indices 0
+through count-1.</li>
+<li><code>seedCustomized[normieId] ? 1 : 0</code> source Nimbostratus
+events.</li>
+<li>The Lightning range for this Abnormie: indices from
+<code>createdAtLightning[abnormieId]</code> through either the current
+global Lightning counter (if Active) or
+<code>frozenAtLightning[abnormieId]</code> (if Static).</li>
+<li>The Thunder range for this Abnormie: same pattern with Thunder
+counters.</li>
 </ol>
-<p>Deterministic and reproducible. Anyone can replay the same sequence
-and produce the same canvas.</p>
+<p>Deterministic and reproducible. Anyone reading on-chain state can
+compute the canvas without privileged data.</p>
 <h2 id="state-system">State system</h2>
 <p>Two independent binary axes describe each Abnormie:</p>
 <h3 id="axis-1-mutability">Axis 1: mutability</h3>
@@ -754,56 +835,59 @@ holds its own autobiography): inverted render.</li>
 <thead>
 <tr class="header">
 <th>Mechanic</th>
-<th>Storage cost</th>
-<th>Compute location</th>
+<th>Storage</th>
+<th>Trigger</th>
 </tr>
 </thead>
 <tbody>
 <tr class="odd">
 <td>Claim</td>
-<td>1 write per claim</td>
-<td>n/a</td>
-</tr>
-<tr class="even">
-<td>Source Nimbostratus</td>
-<td>0 writes</td>
-<td>Render-time event scan of <code>setTransformBitmap</code></td>
-</tr>
-<tr class="odd">
-<td>Lightning Nimbostratus</td>
-<td>1 write per Lightning event</td>
-<td>Render-time replay</td>
+<td>Per-Abnormie initial state from merkle proof</td>
+<td>Phase 1 holder claim or Phase 2 mint</td>
 </tr>
 <tr class="even">
 <td>Cirrus</td>
-<td>0 writes</td>
-<td>Render-time read of Normies <code>Transfer</code> events</td>
+<td>Counter increment on observed owner change</td>
+<td><code>pokeSeed</code> (permissionless) or auto-poll on Abnormie
+transfer</td>
+</tr>
+<tr class="odd">
+<td>Source Nimbostratus</td>
+<td>Boolean flip per seed</td>
+<td><code>pokeSeed</code> when Customized flag flips</td>
+</tr>
+<tr class="even">
+<td>Lightning Nimbostratus</td>
+<td>Global counter increment</td>
+<td>Inline with Lightning action</td>
 </tr>
 <tr class="odd">
 <td>Altocumulus</td>
-<td>1 write per Thunder event</td>
-<td>Render-time replay</td>
+<td>Global counter increment</td>
+<td>Inline with Thunder action</td>
 </tr>
 <tr class="even">
 <td>Freeze (Static)</td>
-<td>Implicit in Thunder or Lightning event</td>
-<td>Render-time check</td>
+<td>Per-Abnormie flag plus mint-time/freeze-time counter records</td>
+<td>Inline with Thunder or Lightning action</td>
 </tr>
 <tr class="odd">
 <td>Agent inversion</td>
-<td>0 writes</td>
-<td>Render-time read of Adapter8004 binding + ownership</td>
+<td>Render-time only</td>
+<td>Read <code>Adapter8004.bindingOf</code> and compare owners</td>
 </tr>
 <tr class="even">
-<td>Living/Dead state</td>
-<td>0 writes</td>
-<td>Check Normies burn state via <code>ownerOf</code></td>
+<td>Living/Dead</td>
+<td>Per-seed cached flag</td>
+<td><code>pokeSeed</code> when <code>Normies.ownerOf</code> reverts or
+returns zero</td>
 </tr>
 </tbody>
 </table>
-<p>No per-token writes for any mutation. The contract holds: ownership
-table, claim assignment, Thunder event log, Lightning event log, claim
-phase state, royalty config.</p>
+<p>Per-cascade writes are constant (one global counter), not linear in
+collection size. Per-Abnormie state is small: owner, isStatic flag, four
+counter snapshots (created-at and frozen-at for Lightning and
+Thunder).</p>
 <h2 id="royalty-enforcement">Royalty enforcement</h2>
 <p><strong>ERC-721C</strong> (LimitBreak Creator Token Standards),
 matching Normies’ own pattern. Default 2.5% royalty, enforced at the
@@ -840,19 +924,18 @@ survives any single deployment.</p>
 <h2 id="traits">Traits</h2>
 <p><strong>State (two axes):</strong> - <strong>Mutability:</strong>
 Active | Static - <strong>Source Life:</strong> Living | Dead</p>
-<p><strong>Source-derived:</strong> - <strong>Source
-Customizations:</strong> integer (count of
-<code>setTransformBitmap</code> events on seed Normie) -
-<strong>Customized:</strong> boolean (Source Customizations ≥ 1) -
-<strong>Source Awakened:</strong> boolean (seed Normie has been
-registered via Adapter8004)</p>
-<p><strong>Recorded:</strong> - <strong>Cirrus Events:</strong> count of
-source Transfer events - <strong>Lightning Events Received:</strong>
-count of Lightning cascade contributions - <strong>Thunder Events
-Received:</strong> count of Thunder cascade contributions -
-<strong>Static At:</strong> block number at which the Abnormie was
-frozen (null if Active) - <strong>Dead At:</strong> block number at
-which the source was burned (null if Living)</p>
+<p><strong>Source-derived:</strong> - <strong>Customized:</strong>
+boolean (seed Normie has been customized at least once) - <strong>Source
+Awakened:</strong> boolean (seed Normie has been registered via
+Adapter8004)</p>
+<p><strong>Recorded:</strong> - <strong>Cirrus Observations:</strong>
+count of seed Normie owner changes observed via <code>pokeSeed</code> -
+<strong>Lightning Events Received:</strong> count of Lightning cascade
+contributions - <strong>Thunder Events Received:</strong> count of
+Thunder cascade contributions - <strong>Static At:</strong> block number
+at which the Abnormie was frozen (null if Active) - <strong>Dead
+At:</strong> block number at which the seed Normie was burned (null if
+Living)</p>
 <p><strong>Visible:</strong> - <strong>Visible Cirrus / Altocumulus /
 Nimbostratus:</strong> counts of currently-rendered pixels
 (post-cancellation) - <strong>Total Coverage:</strong> percentage of
@@ -879,12 +962,12 @@ ownership changes)</p>
 <li>Agent adapter: Adapter8004 (Premm, ERC-8217)</li>
 <li>Sky: <code>#e3e5e4</code></li>
 <li>Nimbostratus: <code>#48494b</code></li>
-<li>Cirrus per transfer event: 2 pixels</li>
-<li>Thunder cascade range: 5–10 Altocumulus pixels</li>
+<li>Cirrus per observed owner change: 2 pixels</li>
+<li>Thunder cascade range: 5–10 Altocumulus pixels per recipient</li>
 <li>Lightning cascade: 1 Nimbostratus pixel per Active Abnormie</li>
-<li>Source Nimbostratus default per customization event: 3 pixels
-(tunable in prototype)</li>
-<li>Mint counts as transfer #1</li>
+<li>Source Nimbostratus: 12 pixels, single event per seed (binary
+signal)</li>
+<li>Deploy-block snapshot owner counts as Cirrus observation #1</li>
 <li>Cancellation rule (any-color collision cancels to Sky)</li>
 <li>Freeze-before-cascade ordering</li>
 <li><strong>Non-self freeze rule</strong> (freeze target must not be
@@ -892,6 +975,8 @@ owned by the burner; enforced at contract level)</li>
 <li>Agent-ownership inversion (Sky↔︎Nimbostratus,
 Cirrus↔︎Altocumulus)</li>
 <li>Thunder and Lightning are the only destructive holder actions</li>
+<li>State advancement: <code>pokeSeed</code> for seed-derived counters
+(permissionless); inline for action-derived counters</li>
 <li>ERC-721C royalty enforcement, 2.5% default</li>
 </ul>
 <h2 id="out-of-scope">Out of scope</h2>
@@ -924,6 +1009,23 @@ Nimbostratus</strong></li>
 </ul>
 <h2 id="changelog">Changelog</h2>
 <ul>
+<li><strong>v0.10</strong>: Mechanism correction. The EVM does not
+permit view functions to iterate past event logs from another contract,
+which v0.9 implied was the renderer path. State-advancement mechanism
+made explicit: a permissionless <code>pokeSeed(normieId)</code> function
+reads <code>Normies.ownerOf</code> and
+<code>INormiesStorage.getTokenTraits</code> and updates Abnormies’
+stored counters. Cirrus accrues from owner changes observed via pokes
+(approximates transfer count; wash trades to same wallet between pokes
+are not recorded). Source Nimbostratus is binary per seed (12 pixels
+once when the Customized flag flips), reflecting the EVM constraint on
+per-customization counting. Per-Abnormie cascade counters are computed
+from global counters and creation/freeze indices, so Lightning and
+Thunder actions require constant writes regardless of supply size. Phase
+1 claim commits initial seed state (owner, Customized flag, burn status)
+via merkle root. Visual specification (cancellation rule, plateau
+dynamics, palette, agent inversion, freeze rule) and locked design
+decisions are unchanged.</li>
 <li><strong>v0.9</strong>: Naming pass locked. Cloud terminology
 throughout. Layers are Sky / Cirrus / Altocumulus / Nimbostratus.
 Destructive actions are Thunder (burn a Dead Abnormie, Altocumulus

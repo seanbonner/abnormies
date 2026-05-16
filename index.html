@@ -80,6 +80,7 @@ body {
 
 .body p {
   margin-bottom: 1.4em;
+  hyphens: auto;
 }
 
 .body code {
@@ -93,19 +94,6 @@ body {
 .body em {
   font-style: italic;
   color: var(--text);
-}
-
-.body a {
-  color: var(--text);
-  text-decoration: none;
-  border-bottom: 1px solid var(--border);
-  padding-bottom: 1px;
-  transition: border-color 0.15s ease, color 0.15s ease;
-}
-
-.body a:hover {
-  border-bottom-color: var(--accent);
-  color: var(--accent);
 }
 
 /* Sample viewer */
@@ -277,7 +265,7 @@ body {
 
   <div class="body">
 
-    <p>Abnormies is a fully on-chain art collection derived from <em><a href="https://www.normies.art/">NORMIES</a></em> (<a href="https://x.com/serc1n">Serc</a>, 2026), exploring network effects, lack of control, and randomness.</p>
+    <p>Abnormies is a fully on-chain art collection derived from <em>NORMIES</em> (Serc, 2026), exploring network effects, lack of control, and randomness.</p>
 
     <p>Each Abnormie has a seed Normie, a specific Normie whose on-chain history shapes the Abnormie's evolution. The Abnormie does not depict its seed Normie. It records, on a 40×40 grid, the consequences of the seed's existence in the network: transfers, customizations, and the destructive choices of other holders. Each Abnormie begins minimal, and all evolve as the network acts on them. Some remain spare; others become dense. None of that activity is authored by the Abnormie's holder, except once, through destruction.</p>
 
@@ -304,9 +292,9 @@ body {
 
     <p>The Normies collection is entering its agent phase via Adapter8004 (ERC-8217, Premm), the binding contract that ties an ERC-8004 agent identity permanently to its underlying NFT. When a seed Normie has been awakened through the adapter and its current owner also holds the corresponding Abnormie, the two are paired. A paired Abnormie inverts at render time. Light becomes dark, dark becomes light. The record reads differently in the hands of the recorded.</p>
 
-    <p>In 2022, <a href="https://x.com/sterlingcrispin">Sterling Crispin</a> published <em><a href="https://wiiides.com/">Wiiides</a></em>, a fully on-chain derivative of CryptoPunks that mutated through transfer activity and decayed toward stripes. CryptoPunks are immutable. Normies are not. Abnormies extend the lineage to a mutable parent, and to a wider range of network events: transfers, customizations, and the destructive choices of other holders. Where Wiiides ended in noise, Abnormies decay toward ambiguity.</p>
+    <p>In 2022, Sterling Crispin published <em>Wiiides</em>, a fully on-chain derivative of CryptoPunks that mutated through transfer activity and decayed toward stripes. CryptoPunks were immutable. Normies are not. Abnormies extend the lineage to a mutable parent, and to a wider range of network events: transfers, customizations, and the destructive choices of other holders. Where Wiiides ended in noise, Abnormies decay toward ambiguity.</p>
 
-    <p>Phase 1: Abnormies will be free to claim (plus gas) for Normies holders for seven days, one Abnormie for each Normie held. Burned Normies will dictate the public allocation. Phase 2: Remaining Abnormies will open minting to the public at a fixed price. This is an art project, there is no presale, no whitelist, no roadmap beyond the specification, once released it runs on it's own forever.</p>
+    <p>Build proceeds. Phase 1 will be a 1:1 holder claim open to Normies holders for seven days, at gas cost. Phase 2 will open mint to the public at a fixed price. There is no presale, no whitelist, no roadmap beyond the specification. No social accounts. Updates will appear here.</p>
 
   </div>
 
@@ -320,7 +308,7 @@ body {
     <div class="row"><span class="label">Lineage</span><a href="https://notaudited.xyz">Wiiides (Sterling Crispin, 2022)</a></div>
     <div class="row"><span class="label">Agent layer</span><a href="https://adapter8004.xyz">Adapter8004 / ERC-8217 (Premm)</a></div>
     <div class="row"><span class="label">License</span>CC0</div>
-    <div class="row"><span class="label">Status</span>Draft v0.9 · Pre-deploy</div>
+    <div class="row"><span class="label">Status</span>Draft v0.10 · Pre-deploy</div>
   </div>
 
 </div>
