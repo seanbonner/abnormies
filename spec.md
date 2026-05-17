@@ -1,7 +1,7 @@
 ---
 title: "Abnormies: Production Spec"
 status: draft
-version: 0.10
+version: 0.11
 source_collection: Normies (Serc, Feb 2026)
 source_contract: 0x9eb6e2025b64f340691e424b7fe7022ffde12438
 agent_adapter: Adapter8004 (Premm, ERC-8217)
@@ -43,11 +43,16 @@ Wiiides (Sterling Crispin, NotAudited.xyz, 2022) is the direct precedent: a full
 **Normies (ERC-721C):** `0x9eb6e2025b64f340691e424b7fe7022ffde12438` on Ethereum mainnet. The wrapper composes two pluggable contracts:
 
 - `INormiesRenderer` produces `tokenURI`. Not used by Abnormies.
-- `INormiesStorage` exposes `getTokenRawImageData`, `getTokenTraits`, `isTokenDataSet`, `isRevealed`. `getTokenTraits` returns 8 bytes including a `Customized` boolean.
+- `INormiesStorage` exposes `getTokenRawImageData`, `getTokenTraits`, `isTokenDataSet`, `isRevealed`. `getTokenTraits` returns 8 trait IDs (Type, Gender, Age, Hair Style, Facial Feature, Eyes, Expression, Accessory). It does not contain a customization bit; the customization signal lives elsewhere, below.
 
-Plus a Canvas contract that emits `setTransformBitmap` on each customization. Abnormies does not read these events directly (see State advancement below).
+Plus the Canvas contract that emits `setTransformBitmap` on each customization, and a separate **NormiesCanvasStorage** contract at `0xC255BE0983776BAB027a156681b6925cde47B2D1` exposing `isTransformed(uint256 tokenId) returns (bool)` as the canonical customization signal. Abnormies reads `isTransformed` directly and ignores the Canvas event stream (events are not readable from view functions).
 
-**Adapter8004 (Premm, ERC-8217: Agent NFT Identity Bindings):** the binding adapter that solves the agent-orphan problem inherent to vanilla ERC-8004. Adapter8004 takes permanent custody of the agent NFT and binds it to the Normie via on-chain metadata. Owning the Normie is owning the agent. Transferring the Normie atomically transfers the agent. See `adapter8004.xyz`.
+**Adapter8004 (Premm, ERC-8217: Agent NFT Identity Bindings):** the binding adapter that solves the agent-orphan problem inherent to vanilla ERC-8004. Adapter8004 takes permanent custody of the agent NFT and binds it to the Normie via on-chain metadata. Owning the Normie is owning the agent. Transferring the Normie atomically transfers the agent. Ethereum mainnet proxy at `0xde152AfB7db5373F34876E1499fbD893A82dD336`. Verified surface (from `adapter8004.xyz/docs/contract`):
+
+- `bindingOf(uint256 agentId) returns (Binding { TokenStandard standard; address tokenContract; uint256 tokenId })`
+- `agentIdForBinding(TokenStandard standard, address tokenContract, uint256 tokenId) returns (uint256 agentId, bool exists)`
+
+Abnormies uses the reverse lookup so no off-chain agentId hint is needed at poke time.
 
 **Soft dependencies:**
 
@@ -65,9 +70,11 @@ The EVM does not permit a contract's view functions to read past event logs from
 Anyone may call `pokeSeed(normieId)` on the Abnormies contract. The function performs view-function reads on the Normies contracts and updates Abnormies state:
 
 1. Reads `Normies.ownerOf(normieId)`. If the call reverts or returns the zero address, sets `seedBurned[normieId] = true`. Otherwise, if the returned address differs from the stored `lastObservedSeedOwner[normieId]`, increments `cirrusCount[normieId]` and updates the stored owner.
-2. Reads `INormiesStorage.getTokenTraits(normieId)` and decodes the `Customized` boolean. If true and `seedCustomized[normieId]` was previously false, sets the flag to true.
+2. Reads `NormiesCanvasStorage.isTransformed(normieId)`. If true and `seedCustomized[normieId]` was previously false, sets the flag to true.
 
 A batched form, `pokeMany(uint256[] normieIds)`, applies the same logic to a list of seed Normies in a single transaction. Used by holders refreshing multiple Abnormies at once and by collection-wide indexers.
+
+A separate `pokeAwakening(normieId)` records agent binding: it calls `Adapter8004.agentIdForBinding(ERC721, Normies, normieId)`, and if `exists` is true, sets `seedAwakened[normieId] = true` and stores `boundAgentId[normieId] = agentId`. One-way per seed.
 
 Pokes are gas-paid by the caller. Anyone can poke any seed at any time.
 
@@ -81,7 +88,7 @@ Thunder and Lightning actions update Abnormies' own state in the same transactio
 
 ### Phase 1 initialization
 
-A merkle root committed at deploy commits each Normie's snapshot state (owner address, `Customized` flag, burn status). Phase 1 claims include a merkle proof that initializes the relevant seed counters and flags. Post-deploy activity is captured via pokes from that point forward.
+A merkle root committed at deploy commits each Normie's snapshot state (owner address, customization status from `isTransformed`, burn status). Phase 1 claims include a merkle proof that initializes the relevant seed counters and flags. Post-deploy activity is captured via pokes from that point forward.
 
 ### Surfacing the refresh action
 
@@ -92,7 +99,7 @@ The abnormies.art website is the canonical surface for this. Requirements:
 - A **Refresh** button (or equivalent label such as **Update**, **Sync**) is present on every Abnormie detail view, always visible regardless of suspected freshness.
 - Clicking the button opens the user's wallet to send a `pokeSeed(normieId)` transaction for the Abnormie's seed.
 - On portfolio views, a single-click **Refresh all** action sends one `pokeMany(uint256[])` transaction batching the user's holdings.
-- The website surfaces a **staleness indicator** alongside the button. The indicator compares the contract's last-observed state for the seed (owner, Customized flag) against the Normies API's current state. When they differ, a visual cue is shown: a colored dot, a "Stale" label, or a brief description of what changed. The indicator informs but does not gate; the button works either way.
+- The website surfaces a **staleness indicator** alongside the button. The indicator compares the contract's last-observed state for the seed (owner, customization) against the Normies API's current state. When they differ, a visual cue is shown: a colored dot, a "Stale" label, or a brief description of what changed. The indicator informs but does not gate; the button works either way.
 - No auto-refresh on page load. The user retains the choice to click. Auto-popping a wallet on visit would be invasive.
 
 User-facing language uses "refresh" or "update." The word "poke" is internal vocabulary for the contract function and never appears in the UI.
@@ -102,8 +109,8 @@ User-facing language uses "refresh" or "update." The word "poke" is internal voc
 | Source | Purpose | Mechanism |
 |---|---|---|
 | `Normies.ownerOf(normieId)` | Living/Dead detection; Cirrus accrual | Read on each `pokeSeed`; also read directly by renderer for inversion check |
-| `INormiesStorage.getTokenTraits(normieId)` | `Customized` boolean for source Nimbostratus | Read on each `pokeSeed` |
-| `Adapter8004.bindingOf(normieId)` | Agent-binding presence for inversion check | Read by renderer at view time |
+| `NormiesCanvasStorage.isTransformed(normieId)` | Binary customization signal for source Nimbostratus | Read on each `pokeSeed` |
+| `Adapter8004.agentIdForBinding(ERC721, Normies, normieId)` | Agent-binding presence for inversion check | Read by `pokeAwakening`; renderer reads `seedAwakened` state |
 | Abnormies own storage | Counters, flags, freeze records, event logs | Read by renderer at view time |
 
 Abnormies does not read `getTokenRawImageData` for any Normie.
@@ -123,16 +130,17 @@ Claims are 1:1 by quantity, not by token ID. A Normies holder with N Normies can
 
 ### Phase 1: Holder Claim
 
-- Duration: 7 days from contract deploy.
+- Duration: 2 days from contract deploy.
 - Eligible: Normies holders at the snapshot block (determined off-chain; the deploy block or an earlier announced cutoff).
 - Cost: gas only.
-- Mechanism: holders submit a merkle proof committing their per-Normie eligibility and the snapshot state of each Normie (owner, `Customized`, burn status). Verified proofs initialize the claimed Abnormies' seed counters and flags.
-- Token IDs: assigned randomly from the unclaimed pool.
+- Mechanism: holders submit a merkle proof committing their per-Normie eligibility and the snapshot state of each Normie (owner, customization status, burn status). Verified proofs initialize the claimed Abnormies' seed counters and flags.
+- Token IDs: assigned randomly from the unclaimed pool via a single Chainlink VRF v2.5 reveal at phase close.
 
 ### Phase 2: Open Mint
 
 - Any address may mint remaining unclaimed slots at 0.01 ETH per Abnormie.
-- Token IDs assigned randomly.
+- Token IDs assigned via rolling Chainlink VRF v2.5 reveals: each batch closes on 100 mints OR 24 hours, whichever comes first.
+- Ends implicitly on supply exhaustion.
 
 ## Visual specification
 
@@ -180,11 +188,11 @@ Cirrus accrues only on observed owner changes. Transfers that occur between two 
 
 #### Nimbostratus (source): seed Normie first customization
 
-- **Trigger:** the first time `pokeSeed` observes `Customized = true` from `INormiesStorage.getTokenTraits(normieId)`. Binary; once per seed.
+- **Trigger:** the first time `pokeSeed` observes `NormiesCanvasStorage.isTransformed(normieId)` returning true. Binary; once per seed.
 - **N per event:** 12 pixels.
 - **Positions:** deterministic, seeded by `keccak256(normieId, "nimbostratus-source")`.
 
-A seed Normie that has never been customized contributes zero source Nimbostratus marks. A seed Normie that has been customized at least once contributes the 12-pixel batch exactly once. The Normies `Customized` flag is one-way; once true, it does not return to false.
+A seed Normie that has never been customized contributes zero source Nimbostratus marks. A seed Normie that has been customized at least once contributes the 12-pixel batch exactly once. The `isTransformed` flag is one-way for our purposes; once observed true, the seed Normie's source Nimbostratus is locked in.
 
 #### Nimbostratus (Lightning): Lightning cascade
 
@@ -280,9 +288,9 @@ When the Abnormie's owner is also the effective owner of the seed Normie's Adapt
 
 Vanilla ERC-8004 mints a separate agent NFT, allowing the Normie and the agent to be owned by different addresses. Adapter8004 (ERC-8217, Premm) takes permanent custody of the agent NFT and binds it via on-chain metadata to the Normie. Selling the Normie atomically transfers control of the agent. **Owning the Normie is owning the agent.**
 
-The inversion check reduces to two view-function reads:
+The inversion check reduces to two view-function reads against Abnormies state:
 
-1. Has the seed Normie been awakened? Query `Adapter8004.bindingOf(normieId)`.
+1. Has the seed Normie been awakened? Read `seedAwakened[normieId]` (set on-chain via `pokeAwakening`, which resolves the agentId via `Adapter8004.agentIdForBinding`).
 2. Is `Abnormies.ownerOf(abnormieId) == Normies.ownerOf(normieId)`?
 
 Both true: inversion. No separate agent-wallet detection needed.
@@ -310,13 +318,13 @@ The underlying event history and stored counters are unchanged. Inversion is a r
 
 | Mechanic | Update path |
 |---|---|
-| Phase 1 claim | Merkle proof of snapshot; initializes seed state for claimed Abnormies |
-| Phase 2 mint | Standard mint with random ID assignment |
+| Phase 1 claim | Merkle proof of snapshot; initializes seed state for claimed Abnormies; receipts paired to Abnormie IDs by single VRF reveal at phase close |
+| Phase 2 mint | Standard mint with random ID assignment via rolling VRF batches |
 | Cirrus (seed transfers) | `pokeSeed` observes `Normies.ownerOf` change; increments counter |
-| Source Nimbostratus (seed customization) | `pokeSeed` observes `Customized` flag flip; sets one-time flag |
+| Source Nimbostratus (seed customization) | `pokeSeed` observes `NormiesCanvasStorage.isTransformed` returning true; sets one-time flag |
 | Lightning, Thunder, freeze | State updated inline in the action transaction |
 | Auto-pokes | `Abnormies._beforeTokenTransfer` calls `pokeSeed` for the transferred Abnormie's seed |
-| Agent inversion | Render-time view-function reads of `Adapter8004.bindingOf` and ownership |
+| Agent inversion | `pokeAwakening` records `seedAwakened`; renderer reads stored flag plus ownership |
 | Living/Dead state | Cached by poke when observed; renderer may also call `ownerOf` for freshness |
 
 The renderer is a pure function of contract state. No external event reads, no oracles, no off-chain dependencies for the canonical visual.
@@ -328,6 +336,7 @@ The renderer is a pure function of contract state. No external event reads, no o
 ## Rendering
 
 - **Fully on-chain SVG renderer**, computed at view-call time as a pure function of stored state.
+- Renderer topology: separable contract, immutable. The token contract holds the renderer address as `immutable`, set in the constructor with no setter.
 - Token URI format: data URI with embedded SVG, matching Normies' format for marketplace compatibility.
 
 ### Website (abnormies.art)
@@ -381,7 +390,8 @@ Frontend deployed on Cloudflare Pages. Mirrored to IPFS, pointed at via ENS (`ab
 
 - Source contract: `0x9eb6e2025b64f340691e424b7fe7022ffde12438`
 - Source standard: ERC-721C (LimitBreak Creator Token Standards)
-- Agent adapter: Adapter8004 (Premm, ERC-8217)
+- NormiesCanvasStorage: `0xC255BE0983776BAB027a156681b6925cde47B2D1`
+- Agent adapter: Adapter8004 (Premm, ERC-8217), proxy `0xde152AfB7db5373F34876E1499fbD893A82dD336`
 - Sky: `#e3e5e4`
 - Nimbostratus: `#48494b`
 - Cirrus per observed owner change: 2 pixels
@@ -394,6 +404,9 @@ Frontend deployed on Cloudflare Pages. Mirrored to IPFS, pointed at via ENS (`ab
 - Agent-ownership inversion (Sky↔Nimbostratus, Cirrus↔Altocumulus)
 - Thunder and Lightning are the only destructive holder actions
 - ERC-721C royalty enforcement, 2.5% default
+- Renderer topology: separable and immutable
+- Phase 1 duration: 2 days, permissionless close
+- Phase 2 reveal: rolling VRF batches closing on 100 mints OR 24 hours
 
 ## Out of scope
 
@@ -420,7 +433,8 @@ Frontend deployed on Cloudflare Pages. Mirrored to IPFS, pointed at via ENS (`ab
 
 ## Changelog
 
-- **v0.10**: Mechanism corrected. EVM view functions cannot read past event logs from other contracts (Solidity documentation, explicit). State advancement specified via permissionless `pokeSeed` (reads `Normies.ownerOf` and `INormiesStorage.getTokenTraits`, advances counters and flags), auto-pokes via `Abnormies._beforeTokenTransfer`, and inline updates from holder actions. Cirrus is "observed owner changes via pokes" rather than exact transfer count. Source Nimbostratus is binary (one 12-pixel batch when `Customized` flag first observed true), not a per-event count. Phase 1 claim initializes seed state from a merkle snapshot at deploy. Thunder, Lightning, cancellation, plateau dynamics, freeze rules, and agent-ownership inversion unchanged from v0.9. Traits updated: `Source Customizations` (integer) becomes `Source Customized` (boolean). Architecture summary and locked parameters updated to reflect mechanism. Out of scope expanded to note the EVM constraint.
+- **v0.11**: Customization signal correction. The customization status is not in `INormiesStorage.getTokenTraits` as previously documented; `getTokenTraits` returns eight trait IDs (Type, Gender, Age, Hair Style, Facial Feature, Eyes, Expression, Accessory). Customization is tracked on a separate contract, `NormiesCanvasStorage` (`0xC255BE0983776BAB027a156681b6925cde47B2D1`), exposing `isTransformed(tokenId)`. `pokeSeed` now reads `isTransformed`; the source Nimbostratus accrual rule (binary, 12 pixels on first observed true) is unchanged. Adapter8004 binding lookup corrected: `bindingOf` takes an `agentId`, not a normie id; the reverse-lookup function `agentIdForBinding(standard, tokenContract, tokenId)` is used by `pokeAwakening(normieId)` so no off-chain agentId hint is needed. Phase 1 duration set to 2 days (down from 7). Locked parameters expanded to include renderer topology, Phase 1 duration, and Phase 2 reveal mechanism. Mechanism otherwise unchanged.
+- **v0.10**: Mechanism corrected. EVM view functions cannot read past event logs from other contracts (Solidity documentation, explicit). State advancement specified via permissionless `pokeSeed`, auto-pokes via `Abnormies._beforeTokenTransfer`, and inline updates from holder actions. Cirrus is "observed owner changes via pokes" rather than exact transfer count. Source Nimbostratus is binary (one 12-pixel batch when customization first observed true), not a per-event count. Phase 1 claim initializes seed state from a merkle snapshot at deploy. Thunder, Lightning, cancellation, plateau dynamics, freeze rules, and agent-ownership inversion unchanged from v0.9. Traits updated: `Source Customizations` (integer) becomes `Source Customized` (boolean). Architecture summary and locked parameters updated to reflect mechanism. Out of scope expanded to note the EVM constraint.
 - **v0.9**: Naming pass locked. Cloud terminology throughout. Layers are Sky / Cirrus / Altocumulus / Nimbostratus. Destructive actions are Thunder (burn a Dead Abnormie, Altocumulus cascade, plus freeze) and Lightning (burn a Living-customized Abnormie, Nimbostratus cascade, plus freeze). State model restructured as two independent binary axes: Active/Static (mutability) and Living/Dead (source life). Cascades affect Active Abnormies regardless of Living/Dead, so Dead-Active Abnormies continue receiving Thunder and Lightning marks until explicitly frozen. The Static+Dead combination natively expresses what earlier drafts called Posthumous Seal. Plain-language instructions on all destructive actions; cloud terminology reserved for layer and action names so users always know what an action does. Source-Nimbostratus and Lightning-Nimbostratus share the darkest color (visually indistinguishable; metadata-separable). Conceptually, the collection also ties into Sean Bonner's forthcoming "Static" photographic series.
 - **v0.8**: Adapter8004 architecture locked. Simplified inversion check.
 - **v0.7**: Locked Normies contract address.
