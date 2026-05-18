@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Abnormies — Specification</title>
-<meta name="description" content="Abnormies — Production specification, draft v0.11.">
+<meta name="description" content="Abnormies — Production specification, draft v0.12.">
 <style>
 @font-face {
   font-family: 'Robotastic';
@@ -258,7 +258,7 @@ body {
   <a href="index.html" class="back-link">← Abnormies</a>
 
   <div class="wordmark">SPECIFICATION</div>
-  <div class="subtitle">Draft v0.11 · Pre-deploy</div>
+  <div class="subtitle">Draft v0.12 · Pre-deploy</div>
 
   <div class="spec">
 <p><em>Co-authored with Claude Opus 4.7. This document may contain
@@ -340,13 +340,18 @@ custody of the agent NFT and binds it to the Normie via on-chain
 metadata. Owning the Normie is owning the agent. Transferring the Normie
 atomically transfers the agent. Ethereum mainnet proxy at
 <code>0xde152AfB7db5373F34876E1499fbD893A82dD336</code>. Verified
-surface (from <code>adapter8004.xyz/docs/contract</code>):</p>
+surface from mainnet-fork testing:</p>
 <ul>
 <li><code>bindingOf(uint256 agentId) returns (Binding { TokenStandard standard; address tokenContract; uint256 tokenId })</code></li>
-<li><code>agentIdForBinding(TokenStandard standard, address tokenContract, uint256 tokenId) returns (uint256 agentId, bool exists)</code></li>
 </ul>
-<p>Abnormies uses the reverse lookup so no off-chain agentId hint is
-needed at poke time.</p>
+<p>The <code>agentIdForBinding</code> reverse lookup documented at
+<code>adapter8004.xyz/docs/contract</code> is not present on the
+deployed implementation. Abnormies’ <code>pokeAwakening</code> therefore
+takes a caller-supplied <code>agentId</code> and verifies the binding
+via <code>bindingOf</code>. The frontend resolves the agentId off-chain
+via <code>api.normies.art</code> (which indexes the adapter’s
+<code>AgentBound</code> event) before calling, so users never enter or
+see an agentId.</p>
 <p><strong>Soft dependencies:</strong></p>
 <ul>
 <li>Normies’ renderer and storage contracts are owner-upgradeable
@@ -380,12 +385,15 @@ sets the flag to true.</li>
 the same logic to a list of seed Normies in a single transaction. Used
 by holders refreshing multiple Abnormies at once and by collection-wide
 indexers.</p>
-<p>A separate <code>pokeAwakening(normieId)</code> records agent
-binding: it calls
-<code>Adapter8004.agentIdForBinding(ERC721, Normies, normieId)</code>,
-and if <code>exists</code> is true, sets
+<p>A separate
+<code>pokeAwakening(uint256 normieId, uint256 agentId)</code> records
+agent binding: it calls <code>Adapter8004.bindingOf(agentId)</code> and
+requires the returned binding matches
+<code>(ERC721, Normies, normieId)</code>. If valid, sets
 <code>seedAwakened[normieId] = true</code> and stores
-<code>boundAgentId[normieId] = agentId</code>. One-way per seed.</p>
+<code>boundAgentId[normieId] = agentId</code>. One-way per seed. The
+agentId is resolved off-chain by the frontend via
+<code>api.normies.art</code>; users never enter or see it.</p>
 <p>Pokes are gas-paid by the caller. Anyone can poke any seed at any
 time.</p>
 <h3 id="auto-pokes-via-abnormies-transfer-hook">Auto-pokes via Abnormies
@@ -403,13 +411,17 @@ triggered by these actions require no external proof.</p>
 <p>A merkle root committed at deploy commits each Normie’s snapshot
 state (owner address, customization status from
 <code>isTransformed</code>, burn status). Phase 1 claims include a
-merkle proof that initializes the relevant seed counters and flags.
-Post-deploy activity is captured via pokes from that point forward.</p>
-<h3 id="surfacing-the-refresh-action">Surfacing the refresh action</h3>
+merkle proof that initializes the relevant seed counters and flags,
+including setting <code>lastObservedSeedOwner</code> to the snapshot
+owner so subsequent pokes correctly attribute the next observed owner
+change as the first Cirrus event. Post-deploy activity is captured via
+pokes from that point forward.</p>
+<h3 id="surfacing-the-refresh-and-awaken-actions">Surfacing the refresh
+and awaken actions</h3>
 <p>State stays current only if pokes happen. Auto-pokes on Abnormie
 transfer and inline updates from holder actions cover most paths. The
-remaining path is users manually triggering pokes when their seed Normie
-has acted but their Abnormie has not been touched.</p>
+remaining paths are users manually triggering pokes when their seed
+Normie has acted but their Abnormie has not been touched.</p>
 <p>The abnormies.art website is the canonical surface for this.
 Requirements:</p>
 <ul>
@@ -430,12 +442,19 @@ Normies API’s current state. When they differ, a visual cue is shown: a
 colored dot, a “Stale” label, or a brief description of what changed.
 The indicator informs but does not gate; the button works either
 way.</li>
-<li>No auto-refresh on page load. The user retains the choice to click.
-Auto-popping a wallet on visit would be invasive.</li>
+<li>No auto-refresh on page load. The user retains the choice to
+click.</li>
 </ul>
-<p>User-facing language uses “refresh” or “update.” The word “poke” is
-internal vocabulary for the contract function and never appears in the
-UI.</p>
+<p>A separate <strong>Awaken</strong> action surfaces when the contract
+has not yet recorded <code>seedAwakened</code> for the Abnormie’s seed
+AND the seed has been awakened on Adapter8004 (detected via
+<code>api.normies.art/agents/binding/{normieId}</code>). Clicking sends
+a <code>pokeAwakening(normieId, agentId)</code> transaction; the agentId
+is resolved off-chain from the API and embedded in the transaction.
+Users never enter or see an agentId.</p>
+<p>User-facing language uses “refresh,” “update,” or “awaken.” The word
+“poke” is internal vocabulary for the contract function and never
+appears in the UI.</p>
 <h3 id="what-abnormies-reads">What Abnormies reads</h3>
 <table>
 <colgroup>
@@ -463,8 +482,9 @@ for inversion check</td>
 <td>Read on each <code>pokeSeed</code></td>
 </tr>
 <tr class="odd">
-<td><code>Adapter8004.agentIdForBinding(ERC721, Normies, normieId)</code></td>
-<td>Agent-binding presence for inversion check</td>
+<td><code>Adapter8004.bindingOf(agentId)</code></td>
+<td>Verifies caller-supplied agentId resolves to the seed Normie, for
+the inversion check</td>
 <td>Read by <code>pokeAwakening</code>; renderer reads
 <code>seedAwakened</code> state</td>
 </tr>
@@ -621,6 +641,12 @@ Nimbostratus marks. A seed Normie that has been customized at least once
 contributes the 12-pixel batch exactly once. The
 <code>isTransformed</code> flag is one-way for our purposes; once
 observed true, the seed Normie’s source Nimbostratus is locked in.</p>
+<p>Note: Awakening (Adapter8004 binding) and customization
+(NormiesCanvasStorage transformation) are independent. Awakening is a
+gas-only transaction; customization requires burning a Normie. Holders
+are more likely to awaken than customize, so a Normie can be Awakened
+without being Customized. The two signals address different state axes
+and should not be treated as proxies for each other.</p>
 <h4 id="nimbostratus-lightning-lightning-cascade">Nimbostratus
 (Lightning): Lightning cascade</h4>
 <ul>
@@ -795,8 +821,7 @@ burn-history layer.</p>
 <li>Altocumulus accumulates from Thunder, fed by Active+Dead supply
 (~1,822 candidates at launch).</li>
 <li>Nimbostratus accumulates from Lightning, fed by
-Active+Living+Customized supply (~300 candidates at launch, growing with
-Normies customization).</li>
+Active+Living+Customized supply.</li>
 </ul>
 <p>Over time, even Abnormies whose seed Normies were never customized
 will accumulate network-Nimbostratus from Lightning. Nimbostratus’s
@@ -819,9 +844,9 @@ agent.</strong></p>
 Abnormies state:</p>
 <ol type="1">
 <li>Has the seed Normie been awakened? Read
-<code>seedAwakened[normieId]</code> (set on-chain via
-<code>pokeAwakening</code>, which resolves the agentId via
-<code>Adapter8004.agentIdForBinding</code>).</li>
+<code>seedAwakened[normieId]</code>, set on-chain via
+<code>pokeAwakening</code>, which verifies a user-supplied agentId via
+<code>Adapter8004.bindingOf</code>.</li>
 <li>Is
 <code>Abnormies.ownerOf(abnormieId) == Normies.ownerOf(normieId)</code>?</li>
 </ol>
@@ -868,7 +893,8 @@ autobiographer holds its own autobiography): inverted render.</li>
 <tbody>
 <tr class="odd">
 <td>Phase 1 claim</td>
-<td>Merkle proof of snapshot; initializes seed state for claimed
+<td>Merkle proof of snapshot; initializes seed state (including
+<code>lastObservedSeedOwner = snapshot owner</code>) for claimed
 Abnormies; receipts paired to Abnormie IDs by single VRF reveal at phase
 close</td>
 </tr>
@@ -898,8 +924,9 @@ one-time flag</td>
 </tr>
 <tr class="odd">
 <td>Agent inversion</td>
-<td><code>pokeAwakening</code> records <code>seedAwakened</code>;
-renderer reads stored flag plus ownership</td>
+<td><code>pokeAwakening(normieId, agentId)</code> verifies via
+<code>bindingOf</code> and records <code>seedAwakened</code>; renderer
+reads stored flag plus ownership</td>
 </tr>
 <tr class="even">
 <td>Living/Dead state</td>
@@ -911,11 +938,17 @@ renderer reads stored flag plus ownership</td>
 <p>The renderer is a pure function of contract state. No external event
 reads, no oracles, no off-chain dependencies for the canonical
 visual.</p>
-<h2 id="royalty-enforcement">Royalty enforcement</h2>
+<h2 id="royalty-and-treasury">Royalty and treasury</h2>
 <p><strong>ERC-721C</strong> (LimitBreak Creator Token Standards),
 matching Normies’ own pattern. Default 2.5% royalty, enforced at the
 contract level; non-compliant marketplaces are blocked from facilitating
 transfers.</p>
+<p><strong>Treasury</strong> for Phase 2 mint revenue is an immutable
+address set in the constructor. A permissionless <code>withdraw()</code>
+function pushes the contract’s ETH balance to the treasury. No admin
+discretion, no upgrade path. The treasury address and the royalty
+receiver are independent constructor parameters and may be the same or
+different.</p>
 <h2 id="rendering">Rendering</h2>
 <ul>
 <li><strong>Fully on-chain SVG renderer</strong>, computed at view-call
@@ -935,6 +968,12 @@ contract has observed. <strong>Refresh all</strong> button on portfolio
 views that calls <code>pokeMany</code> for the viewer’s holdings.
 User-facing label is “Refresh” or “Update”; the contract function name
 is not exposed.</li>
+<li><strong>Awaken button</strong> that surfaces when the contract has
+not yet recorded <code>seedAwakened</code> for the Abnormie’s seed AND
+the Normies API reports an Adapter8004 binding exists. Resolves the
+agentId off-chain via the API and calls
+<code>pokeAwakening(normieId, agentId)</code>. Users never enter or see
+an agentId.</li>
 <li>Wallet connect.</li>
 <li>Static and animated views of any Abnormie.</li>
 <li>Animation playback reads Normies API
@@ -993,6 +1032,8 @@ ownership changes)</p>
 <code>0xC255BE0983776BAB027a156681b6925cde47B2D1</code></li>
 <li>Agent adapter: Adapter8004 (Premm, ERC-8217), proxy
 <code>0xde152AfB7db5373F34876E1499fbD893A82dD336</code></li>
+<li>Adapter8004 binding lookup: <code>bindingOf(agentId)</code>;
+caller-supplied agentId</li>
 <li>Sky: <code>#e3e5e4</code></li>
 <li>Nimbostratus: <code>#48494b</code></li>
 <li>Cirrus per observed owner change: 2 pixels</li>
@@ -1009,6 +1050,8 @@ enforced at contract level)</li>
 Cirrus↔︎Altocumulus)</li>
 <li>Thunder and Lightning are the only destructive holder actions</li>
 <li>ERC-721C royalty enforcement, 2.5% default</li>
+<li>Treasury: immutable address set at deploy, permissionless
+<code>withdraw()</code> to that address</li>
 <li>Renderer topology: separable and immutable</li>
 <li>Phase 1 duration: 2 days, permissionless close</li>
 <li>Phase 2 reveal: rolling VRF batches closing on 100 mints OR 24
@@ -1032,6 +1075,8 @@ available for them).</li>
 <li>Self-freezing (structurally impossible by design).</li>
 <li>Reading another contract’s past event logs from view functions (not
 possible on the EVM).</li>
+<li>Admin-controlled withdrawal of Phase 2 revenue (the treasury
+address is immutable and the withdraw function is permissionless).</li>
 </ul>
 <h2 id="naming-and-surface">Naming and surface</h2>
 <ul>
@@ -1045,6 +1090,22 @@ Nimbostratus</strong></li>
 </ul>
 <h2 id="changelog">Changelog</h2>
 <ul>
+<li><strong>v0.12</strong>: Awakening flow correction. The
+<code>agentIdForBinding</code> reverse-lookup function documented at
+<code>adapter8004.xyz/docs/contract</code> is not present on the
+deployed Adapter8004 implementation (verified by mainnet-fork testing).
+<code>pokeAwakening</code> therefore takes a caller-supplied
+<code>agentId</code> and verifies the binding via
+<code>bindingOf(agentId)</code>. The frontend resolves the agentId
+off-chain via <code>api.normies.art/agents/binding/{normieId}</code> and
+embeds it in the transaction; users never enter or see an agentId.
+Treasury added: an immutable address set at deploy receives Phase 2 mint
+revenue via a permissionless <code>withdraw()</code> function. Treasury
+and royalty receiver are independent constructor parameters and may be
+the same or different. Note added that awakening and customization are
+independent signals and should not be treated as proxies. Phase 1
+<code>lastObservedSeedOwner</code> initialization made explicit in the
+architecture summary. Mechanism otherwise unchanged from v0.11.</li>
 <li><strong>v0.11</strong>: Customization signal correction. The
 customization status is not in
 <code>INormiesStorage.getTokenTraits</code> as previously documented;
@@ -1056,12 +1117,10 @@ is tracked on a separate contract, <code>NormiesCanvasStorage</code>
 <code>isTransformed</code>; the source Nimbostratus accrual rule
 (binary, 12 pixels on first observed true) is unchanged. Adapter8004
 binding lookup corrected: <code>bindingOf</code> takes an
-<code>agentId</code>, not a normie id; the reverse-lookup function
-<code>agentIdForBinding(standard, tokenContract, tokenId)</code> is used
-by <code>pokeAwakening(normieId)</code> so no off-chain agentId hint is
-needed. Phase 1 duration set to 2 days (down from 7). Locked parameters
-expanded to include renderer topology, Phase 1 duration, and Phase 2
-reveal mechanism. Mechanism otherwise unchanged.</li>
+<code>agentId</code>, not a normie id. Phase 1 duration set to 2 days
+(down from 7). Locked parameters expanded to include renderer topology,
+Phase 1 duration, and Phase 2 reveal mechanism. Mechanism otherwise
+unchanged.</li>
 <li><strong>v0.10</strong>: Mechanism corrected. EVM view functions
 cannot read past event logs from other contracts (Solidity
 documentation, explicit). State advancement specified via permissionless
