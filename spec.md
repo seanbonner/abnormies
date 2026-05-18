@@ -1,7 +1,7 @@
 ---
 title: "Abnormies: Production Spec"
 status: draft
-version: 0.12
+version: 0.13
 source_collection: Normies (Serc, Feb 2026)
 source_contract: 0x9eb6e2025b64f340691e424b7fe7022ffde12438
 agent_adapter: Adapter8004 (Premm, ERC-8217)
@@ -68,7 +68,7 @@ The EVM does not permit a contract's view functions to read past event logs from
 
 Anyone may call `pokeSeed(normieId)` on the Abnormies contract. The function performs view-function reads on the Normies contracts and updates Abnormies state:
 
-1. Reads `Normies.ownerOf(normieId)`. If the call reverts or returns the zero address, sets `seedBurned[normieId] = true`. Otherwise, if the returned address differs from the stored `lastObservedSeedOwner[normieId]`, increments `cirrusCount[normieId]` and updates the stored owner.
+1. Reads `Normies.ownerOf(normieId)`. If the call reverts or returns the zero address, sets `seedBurned[normieId] = true` and records the current block number as `seedDeadAtBlock[normieId]`. Otherwise, if the returned address differs from the stored `lastObservedSeedOwner[normieId]`, increments `cirrusCount[normieId]` and updates the stored owner.
 2. Reads `NormiesCanvasStorage.isTransformed(normieId)`. If true and `seedCustomized[normieId]` was previously false, sets the flag to true.
 
 A batched form, `pokeMany(uint256[] normieIds)`, applies the same logic to a list of seed Normies in a single transaction. Used by holders refreshing multiple Abnormies at once and by collection-wide indexers.
@@ -135,12 +135,13 @@ Claims are 1:1 by quantity, not by token ID. A Normies holder with N Normies can
 - Eligible: Normies holders at the snapshot block (determined off-chain; the deploy block or an earlier announced cutoff).
 - Cost: gas only.
 - Mechanism: holders submit a merkle proof committing their per-Normie eligibility and the snapshot state of each Normie (owner, customization status, burn status). Verified proofs initialize the claimed Abnormies' seed counters and flags.
-- Token IDs: assigned randomly from the unclaimed pool via a single Chainlink VRF v2.5 reveal at phase close.
+- Token IDs: assigned randomly from the unclaimed pool via a single Chainlink VRF v2.5 reveal at phase close. Receipts are resolved in strictly monotonic order; out-of-order resolution is not permitted.
 
 ### Phase 2: Open Mint
 
 - Any address may mint remaining unclaimed slots at 0.01 ETH per Abnormie.
 - Token IDs assigned via rolling Chainlink VRF v2.5 reveals: each batch closes on 100 mints OR 24 hours, whichever comes first.
+- Receipts within and across revealed batches are resolved in strictly monotonic order.
 - Ends implicitly on supply exhaustion.
 
 ## Visual specification
@@ -185,7 +186,7 @@ There is no layer hierarchy. Any color can cancel any other.
 - **N per event:** 2 pixels.
 - **Positions:** deterministic, seeded by `keccak256(normieId, cirrusIndex, "cirrus")`.
 
-Cirrus accrues only on observed owner changes. Transfers that occur between two pokes and end at the same owner that was previously observed are not recorded. The Phase 1 snapshot owner counts as the initial observation.
+Cirrus accrues only on observed owner changes. Transfers that occur between two pokes and end at the same owner that was previously observed are not recorded. The Phase 1 snapshot owner counts as the initial observation. The counter saturates at `uint16.max`; subsequent observations do not revert.
 
 #### Nimbostratus (source): seed Normie first customization
 
@@ -213,8 +214,8 @@ Note: Awakening (Adapter8004 binding) and customization (NormiesCanvasStorage tr
 
 The renderer replays events from stored counters in chronological order:
 
-1. All Cirrus events: `cirrusCount[normieId]` events, indexed 0 through `cirrusCount - 1`.
-2. Source Nimbostratus event: one event, conditional on `seedCustomized[normieId] = true`.
+1. All Cirrus events: `cirrusCount[normieId]` events (or the freeze-time snapshot for Static Abnormies), indexed 0 through count - 1.
+2. Source Nimbostratus event: one event, conditional on `seedCustomized[normieId] = true` (or the freeze-time snapshot for Static Abnormies).
 3. All Lightning events received, in chronological order from Abnormies storage.
 4. All Thunder events received, in chronological order from Abnormies storage.
 
@@ -227,16 +228,16 @@ Two independent binary axes describe each Abnormie:
 ### Axis 1: mutability
 
 - **Active**: the Abnormie may still receive new marks from any event type that targets it.
-- **Static**: the Abnormie is frozen. State at the moment of becoming Static is permanent. Immune to all future events. Terminal.
+- **Static**: the Abnormie is frozen. State at the moment of becoming Static is permanent. Immune to all future events. Terminal. All seed-derived render inputs (cirrusCount, seedCustomized, seedBurned, and the Dead At block) are snapshotted into per-Abnormie storage at the moment of freeze. Subsequent pokes against the seed do not affect a Static Abnormie's render or metadata.
 
-An Abnormie becomes Static when chosen as the freeze target of a Thunder or Lightning action. The freeze applies before the cascade fires, so the newly Static Abnormie receives no contribution from the action that froze it.
+An Abnormie becomes Static when chosen as the freeze target of a Thunder or Lightning action. The freeze applies before the cascade fires, so the newly Static Abnormie receives no contribution from the action that froze it. The freezing action also inline-pokes the freeze target's seed so the snapshot reflects the latest observable seed state at freeze time.
 
 ### Axis 2: source life
 
 - **Living**: the seed Normie is alive and may continue to influence the Abnormie (transfers and customizations are observable via pokes).
 - **Dead**: the seed Normie has been burned. No further Cirrus or source Nimbostratus events can accrue. The Abnormie may still receive Thunder and Lightning cascades while Active.
 
-The transition from Living to Dead is recorded on a poke that observes `Normies.ownerOf(normieId)` reverting or returning address(0). One-way.
+The transition from Living to Dead is recorded on a poke that observes `Normies.ownerOf(normieId)` reverting or returning address(0). One-way. For Static Abnormies, Source Life is read from the freeze-time snapshot per Axis 1; subsequent observed burns of the seed do not change a Static Abnormie's Source Life or Dead At trait.
 
 ### Combinations
 
@@ -259,6 +260,7 @@ Two burn paths. Each burns the burner's Abnormie, casts a cascade across the net
 - **Burns:** one Active+Dead Abnormie.
 - **Freezes:** one Active Abnormie of the burner's choice. Frozen *before* cascade fires. **Must not be owned by burner.**
 - **Cascade:** 5 to 10 Altocumulus pixels per Active Abnormie (excluding the freeze target and the burned Abnormie).
+- The burner's seed is inline-poked before the SeedDead check; the freeze target's seed is inline-poked before the freeze snapshot is captured. Both ensure the action operates on the latest observable seed state.
 
 ### Lightning: burn a Living, customized Abnormie
 
@@ -267,6 +269,7 @@ Two burn paths. Each burns the burner's Abnormie, casts a cascade across the net
 - **Burns:** one Active+Living Abnormie whose seed is customized.
 - **Freezes:** one Active Abnormie of the burner's choice. Frozen *before* cascade fires. **Must not be owned by burner.**
 - **Cascade:** 1 Nimbostratus pixel per Active Abnormie (excluding the freeze target and the burned Abnormie).
+- The burner's seed is inline-poked before the SeedDead and SeedNotCustomized checks; the freeze target's seed is inline-poked before the freeze snapshot is captured.
 
 ### The non-self freeze rule
 
@@ -321,14 +324,15 @@ The underlying event history and stored counters are unchanged. Inversion is a r
 
 | Mechanic | Update path |
 |---|---|
-| Phase 1 claim | Merkle proof of snapshot; initializes seed state (including `lastObservedSeedOwner = snapshot owner`) for claimed Abnormies; receipts paired to Abnormie IDs by single VRF reveal at phase close |
-| Phase 2 mint | Standard mint with random ID assignment via rolling VRF batches |
-| Cirrus (seed transfers) | `pokeSeed` observes `Normies.ownerOf` change; increments counter |
+| Phase 1 claim | Merkle proof of snapshot; initializes seed state (including `lastObservedSeedOwner = snapshot owner`) for claimed Abnormies; receipts paired to Abnormie IDs in monotonic order by single VRF reveal at phase close |
+| Phase 2 mint | Standard mint with random ID assignment via rolling VRF batches; receipts resolved in monotonic order across and within batches |
+| Cirrus (seed transfers) | `pokeSeed` observes `Normies.ownerOf` change; increments counter (saturating at `uint16.max`) |
 | Source Nimbostratus (seed customization) | `pokeSeed` observes `NormiesCanvasStorage.isTransformed` returning true; sets one-time flag |
-| Lightning, Thunder, freeze | State updated inline in the action transaction |
+| Lightning, Thunder, freeze | State updated inline in the action transaction; both the burner's seed and the freeze target's seed are inline-poked at action time |
 | Auto-pokes | `Abnormies._beforeTokenTransfer` calls `pokeSeed` for the transferred Abnormie's seed |
 | Agent inversion | `pokeAwakening(normieId, agentId)` verifies via `bindingOf` and records `seedAwakened`; renderer reads stored flag plus ownership |
-| Living/Dead state | Cached by poke when observed; renderer may also call `ownerOf` for freshness |
+| Living/Dead state | Cached by poke when observed for Active Abnormies; renderer may also call `ownerOf` for freshness. For Static Abnormies, read from the freeze-time snapshot stored on the Abnormie. |
+| Static render inputs | All seed-derived inputs (cirrusCount, seedCustomized, seedBurned, Dead At block) snapshotted at freeze; subsequent pokes against the seed do not affect Static Abnormies' renders or metadata |
 
 The renderer is a pure function of contract state. No external event reads, no oracles, no off-chain dependencies for the canonical visual.
 
@@ -343,6 +347,7 @@ The renderer is a pure function of contract state. No external event reads, no o
 - **Fully on-chain SVG renderer**, computed at view-call time as a pure function of stored state.
 - Renderer topology: separable contract, immutable. The token contract holds the renderer address as `immutable`, set in the constructor with no setter.
 - Token URI format: data URI with embedded SVG, matching Normies' format for marketplace compatibility.
+- For Active Abnormies, the renderer reads live seed-derived inputs (cirrusCount, seedCustomized, seedBurned, Dead At block). For Static Abnormies, it reads the per-Abnormie freeze-time snapshots of those same inputs.
 
 ### Website (abnormies.art)
 
@@ -365,23 +370,22 @@ Frontend deployed on Cloudflare Pages. Mirrored to IPFS, pointed at via ENS (`ab
 
 **State (two axes):**
 - **Mutability:** Active | Static
-- **Source Life:** Living | Dead
+- **Source Life:** Living | Dead (locked at freeze time for Static Abnormies)
 
 **Source-derived (from stored state):**
-- **Source Customized:** boolean (the seed Normie has been observed customized at least once)
+- **Source Customized:** boolean (the seed Normie has been observed customized at least once; locked at freeze time for Static Abnormies)
 - **Source Awakened:** boolean (the seed Normie has been registered via Adapter8004)
 
 **Recorded (counters):**
-- **Cirrus Events:** count of observed owner changes on the seed Normie
+- **Cirrus Events:** count of observed owner changes on the seed Normie (saturating at `uint16.max`; locked at freeze time for Static Abnormies)
 - **Lightning Events Received:** count of Lightning cascade contributions
 - **Thunder Events Received:** count of Thunder cascade contributions
 - **Static At:** block number at which the Abnormie was frozen (null if Active)
-- **Dead At:** block number at which the seed Normie's burn was observed (null if Living)
+- **Dead At:** block number at which the seed Normie's burn was observed. Null for Active Abnormies whose seed is currently Living. For Static Abnormies, the value is locked at freeze time; null forever if the seed was Living at freeze.
 
 **Visible:**
 - **Visible Cirrus / Altocumulus / Nimbostratus:** counts of currently-rendered pixels (post-cancellation)
 - **Total Coverage:** percentage of canvas that is non-Sky
-- **Cancellation Rate:** ratio of cancelled touches to total touches
 
 **Action attribution:**
 - **Frozen By:** address of the burner who triggered the Thunder or Lightning that froze this Abnormie (null if Active)
@@ -408,13 +412,15 @@ Frontend deployed on Cloudflare Pages. Mirrored to IPFS, pointed at via ENS (`ab
 - Cancellation rule (any-color collision cancels to Sky)
 - Freeze-before-cascade ordering
 - Non-self freeze rule (freeze target must not be owned by the burner; enforced at contract level)
+- Static state: all seed-derived render inputs snapshotted at freeze time; terminal
 - Agent-ownership inversion (Sky↔Nimbostratus, Cirrus↔Altocumulus)
 - Thunder and Lightning are the only destructive holder actions
 - ERC-721C royalty enforcement, 2.5% default
 - Treasury: immutable address set at deploy, permissionless `withdraw()` to that address
 - Renderer topology: separable and immutable
 - Phase 1 duration: 2 days, permissionless close
-- Phase 2 reveal: rolling VRF batches closing on 100 mints OR 24 hours
+- Phase 1 reveal: single VRF call at phase close; receipts resolved in monotonic order
+- Phase 2 reveal: rolling VRF batches closing on 100 mints OR 24 hours; receipts resolved in monotonic order
 
 ## Out of scope
 
@@ -430,6 +436,7 @@ Frontend deployed on Cloudflare Pages. Mirrored to IPFS, pointed at via ENS (`ab
 - Self-freezing (structurally impossible by design).
 - Reading another contract's past event logs from view functions (not possible on the EVM).
 - Admin-controlled withdrawal of Phase 2 revenue (the treasury address is immutable and the withdraw function is permissionless).
+- Cancellation Rate trait (canvas conveys cancellation visually; counting total touches on-chain is expensive and the visible plateau already encodes the information).
 
 ## Naming and surface
 
@@ -442,6 +449,7 @@ Frontend deployed on Cloudflare Pages. Mirrored to IPFS, pointed at via ENS (`ab
 
 ## Changelog
 
+- **v0.13**: Static-state snapshots clarified. The terminal-state rule on Axis 1 (Static Abnormies immune to future events) is now made explicit for all seed-derived render inputs: `cirrusCount`, `seedCustomized`, `seedBurned`, and `Dead At` block are each snapshotted into per-Abnormie storage at the moment of freeze. Source Life and the Dead At trait read from these snapshots for Static Abnormies and from live seed state for Active Abnormies. Cirrus counter behavior added: saturates at `uint16.max` rather than reverting, preserving liveness of pokes and Abnormie transfers in the extreme edge case. Phase 1 and Phase 2 reveal resolution clarified: receipts are resolved in strictly monotonic order to prevent reordering attacks against the public VRF seed. Thunder and Lightning inline-poke both the burner's seed and the freeze target's seed at action time to ensure all checks and snapshots operate on the latest observable seed state. Cancellation Rate trait removed; counting total touches on-chain is expensive and the canvas already conveys cancellation visually. Mechanism otherwise unchanged from v0.12.
 - **v0.12**: Awakening flow correction. The `agentIdForBinding` reverse-lookup function documented at `adapter8004.xyz/docs/contract` is not present on the deployed Adapter8004 implementation (verified by mainnet-fork testing). `pokeAwakening` therefore takes a caller-supplied `agentId` and verifies the binding via `bindingOf(agentId)`. The frontend resolves the agentId off-chain via `api.normies.art/agents/binding/{normieId}` and embeds it in the transaction; users never enter or see an agentId. Treasury added: an immutable address set at deploy receives Phase 2 mint revenue via a permissionless `withdraw()` function. Treasury and royalty receiver are independent constructor parameters and may be the same or different. Note added that awakening and customization are independent signals and should not be treated as proxies. Phase 1 `lastObservedSeedOwner` initialization made explicit in the architecture summary. Mechanism otherwise unchanged from v0.11.
 - **v0.11**: Customization signal correction. The customization status is not in `INormiesStorage.getTokenTraits` as previously documented; `getTokenTraits` returns eight trait IDs (Type, Gender, Age, Hair Style, Facial Feature, Eyes, Expression, Accessory). Customization is tracked on a separate contract, `NormiesCanvasStorage` (`0xC255BE0983776BAB027a156681b6925cde47B2D1`), exposing `isTransformed(tokenId)`. `pokeSeed` now reads `isTransformed`; the source Nimbostratus accrual rule (binary, 12 pixels on first observed true) is unchanged. Adapter8004 binding lookup corrected: `bindingOf` takes an `agentId`, not a normie id. Phase 1 duration set to 2 days (down from 7). Locked parameters expanded to include renderer topology, Phase 1 duration, and Phase 2 reveal mechanism. Mechanism otherwise unchanged.
 - **v0.10**: Mechanism corrected. EVM view functions cannot read past event logs from other contracts (Solidity documentation, explicit). State advancement specified via permissionless `pokeSeed`, auto-pokes via `Abnormies._beforeTokenTransfer`, and inline updates from holder actions. Cirrus is "observed owner changes via pokes" rather than exact transfer count. Source Nimbostratus is binary (one 12-pixel batch when customization first observed true), not a per-event count. Phase 1 claim initializes seed state from a merkle snapshot at deploy. Thunder, Lightning, cancellation, plateau dynamics, freeze rules, and agent-ownership inversion unchanged from v0.9. Traits updated: `Source Customizations` (integer) becomes `Source Customized` (boolean). Architecture summary and locked parameters updated to reflect mechanism. Out of scope expanded to note the EVM constraint.
