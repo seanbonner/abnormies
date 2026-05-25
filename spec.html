@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Abnormies — Specification</title>
-<meta name="description" content="Abnormies — Production specification, draft v0.13.">
+<meta name="description" content="Abnormies — Production specification, draft v0.14.">
 <style>
 @font-face {
   font-family: 'Robotastic';
@@ -258,7 +258,7 @@ body {
   <a href="index.html" class="back-link">← Abnormies</a>
 
   <div class="wordmark">SPECIFICATION</div>
-  <div class="subtitle">Draft v0.13 · Pre-deploy</div>
+  <div class="subtitle">Draft v0.14 · Pre-deploy</div>
 
   <div class="spec">
 <p><em>Co-authored with Claude Opus 4.7. This document may contain
@@ -360,7 +360,9 @@ see an agentId.</p>
 <li>Adapter8004 currently has two Normies team wallets registered as a
 safety layer pending multi-sig governance.</li>
 </ul>
-<p>Documented for transparency.</p>
+<p>Documented for transparency. Abnormies has no other external service
+dependencies; reveal randomness is sourced from EVM blockhashes rather
+than from any oracle service.</p>
 <h2 id="state-advancement">State advancement</h2>
 <p>The EVM does not permit a contract’s view functions to read past
 event logs from other contracts. The Solidity documentation states this
@@ -400,10 +402,9 @@ agentId is resolved off-chain by the frontend via
 time.</p>
 <h3 id="auto-pokes-via-abnormies-transfer-hook">Auto-pokes via Abnormies
 transfer hook</h3>
-<p><code>Abnormies._beforeTokenTransfer</code> (or the LimitBreak
-ERC-721C equivalent) calls <code>pokeSeed</code> for the transferred
-Abnormie’s seed as a side effect. Every Abnormie transfer refreshes its
-seed’s state.</p>
+<p><code>Abnormies._beforeTokenTransfer</code> calls <code>pokeSeed</code>
+for the transferred Abnormie’s seed as a side effect. Every Abnormie
+transfer refreshes its seed’s state.</p>
 <h3 id="inline-updates-from-holder-actions">Inline updates from holder
 actions</h3>
 <p>Thunder and Lightning actions update Abnormies’ own state in the same
@@ -510,32 +511,98 @@ abnormies.art. No third-party launchpad or platform dependency.</p>
 <h3 id="random-assignment">Random assignment</h3>
 <p>Claims are 1:1 by quantity, not by token ID. A Normies holder with N
 Normies can claim N Abnormies, but the specific Abnormie token IDs they
-receive are randomly assigned at claim time from the unclaimed pool.
-Dead-source slots are included in the random pool from the start.</p>
+receive are randomly assigned via the reveal mechanism described below.
+Dead-source slots are included in the random pool from the start. Claim
+and mint receipts are created in monotonic order across both phases; the
+entire receipt list is sealed and revealed in a single shot.</p>
 <h3 id="phase-1-holder-claim">Phase 1: Holder Claim</h3>
 <ul>
 <li>Duration: 2 days from contract deploy.</li>
-<li>Eligible: Normies holders at the snapshot block (determined
-off-chain; the deploy block or an earlier announced cutoff).</li>
+<li>Eligible: Normies holders at the snapshot block (announced publicly
+before deploy).</li>
 <li>Cost: gas only.</li>
 <li>Mechanism: holders submit a merkle proof committing their per-Normie
 eligibility and the snapshot state of each Normie (owner, customization
-status, burn status). Verified proofs initialize the claimed Abnormies’
-seed counters and flags.</li>
-<li>Token IDs: assigned randomly from the unclaimed pool via a single
-Chainlink VRF v2.5 reveal at phase close. Receipts are resolved in
-strictly monotonic order; out-of-order resolution is not permitted.</li>
+status, burn status). Verified proofs create claim receipts and reserve
+those Normie IDs from the Phase 2 pool.</li>
+<li>Token IDs: not assigned at claim time; assigned in the single
+collection-wide reveal after Phase 2 sealing (see Reveal section).</li>
 </ul>
 <h3 id="phase-2-open-mint">Phase 2: Open Mint</h3>
 <ul>
-<li>Any address may mint remaining unclaimed slots at 0.01 ETH per
-Abnormie.</li>
-<li>Token IDs assigned via rolling Chainlink VRF v2.5 reveals: each
-batch closes on 100 mints OR 24 hours, whichever comes first.</li>
-<li>Receipts within and across revealed batches are resolved in strictly
-monotonic order.</li>
-<li>Ends implicitly on supply exhaustion.</li>
+<li>Opens immediately after Phase 1 closes via permissionless
+<code>closePhase1()</code>.</li>
+<li>Any address may mint remaining slots at 0.005 ETH per Abnormie.</li>
+<li>The contract owner may airdrop unminted slots to any address as
+gas-only transactions, in any quantity up to a per-call cap of 50.
+Airdrop receipts and paid-mint receipts are interleaved in the unified
+receipt list in append order.</li>
+<li>Phase 2 ends in one of two ways:
+<ul>
+<li><strong>Supply exhaustion</strong>: the last mint or airdrop that
+brings remaining supply to zero auto-seals the receipt list.</li>
+<li><strong>Fallback seal</strong>: anyone may call
+<code>sealForReveal()</code> after <code>phase1ClosedAt + 14 days</code>
+to seal the current receipt list and trigger the reveal sequence,
+regardless of remaining supply.</li>
+</ul></li>
 </ul>
+<p>After sealing, no more mints or airdrops are accepted. Unminted slots
+if any (only possible under the fallback path) remain unminted forever;
+the corresponding Abnormie IDs simply never enter circulation.</p>
+<h2 id="reveal">Reveal</h2>
+<p>Random assignment of receipts to Abnormie IDs happens in a single
+collection-wide reveal after the receipt list is sealed. The reveal
+architecture is a three-step seal-then-commit-then-reveal flow that uses
+Ethereum blockhashes as the entropy source. No external oracle
+service.</p>
+<ol>
+<li><strong>Seal.</strong> The receipt list is closed (no more mints or
+airdrops). Recorded <code>sealedAtBlock</code> is the current block
+number at the moment of sealing. Triggered automatically by the last
+receipt-creating transaction when supply hits zero, or manually by
+anyone via <code>sealForReveal()</code> after the 14-day fallback
+delay.</li>
+<li><strong>Wait.</strong> After sealing, the contract requires that all
+four entropy blocks be mined and within EVM blockhash range before
+reveal can proceed. The entropy blocks are <code>sealedAtBlock + 8</code>
+through <code>sealedAtBlock + 11</code> inclusive.</li>
+<li><strong>Reveal.</strong> Anyone calls <code>reveal()</code>. The
+function mixes the four entropy blockhashes through a
+<code>keccak256</code> chain into the <code>revealSeed</code>. The reveal
+window opens at <code>sealedAtBlock + 13</code> (one block after the last
+entropy block is mined) and closes at <code>sealedAtBlock + 240</code>
+(deliberately before EVM’s 256-block blockhash horizon, with
+margin).</li>
+<li><strong>Resolve.</strong> After reveal, anyone calls
+<code>resolveReceipts(count)</code> repeatedly until every receipt is
+paired. Resolution is strictly monotonic; receipts cannot be reordered
+or skipped. Each receipt’s assigned Abnormie ID is derived
+deterministically from <code>revealSeed</code>, the receipt index, and a
+Fisher-Yates draw over the unclaimed pool.</li>
+</ol>
+<p>If <code>reveal()</code> is not called within 240 blocks of sealing
+(the EVM blockhash window expires for the earliest entropy block beyond
+that), anyone may call <code>reseal()</code> to reset
+<code>sealedAtBlock</code> to the current block. The receipt list itself
+does not change; only the seal block is updated. Reveal then proceeds
+against a fresh entropy window.</p>
+<h3 id="reveal-randomness-properties">Reveal randomness properties</h3>
+<p>The four-block entropy mix prevents intermediate-block proposer bias:
+any proposer in positions 1 through 3 of the entropy window sees only
+partial seed data and cannot compute the final seed. The proposer of the
+<strong>final</strong> entropy block, however, can compute the complete
+reveal seed before publishing their block and can withhold the block
+(forfeiting that block’s MEV reward) to roll for a different final hash
+on a replacement block. This is a single conditional reroll, not
+arbitrary seed selection, and the attacker pays the cost of a block
+reward forfeit per attempt.</p>
+<p>For a small-fractional-stakes art project (0.005 ETH per Abnormie,
+total project pot in the low tens of ETH), the manipulation surface is
+small relative to other operational concerns. The architecture trades
+the absolute proposer-bias resistance of an oracle-based randomness
+service (Chainlink VRF and similar) for the absence of any external
+service dependency.</p>
 <h2 id="visual-specification">Visual specification</h2>
 <h3 id="layers">Layers</h3>
 <p>40×40 monochrome grid, identical dimensions to Normies. Four-color
@@ -915,15 +982,35 @@ autobiographer holds its own autobiography): inverted render.</li>
 <tbody>
 <tr class="odd">
 <td>Phase 1 claim</td>
-<td>Merkle proof of snapshot; initializes seed state (including
-<code>lastObservedSeedOwner = snapshot owner</code>) for claimed
-Abnormies; receipts paired to Abnormie IDs in monotonic order by single
-VRF reveal at phase close</td>
+<td>Merkle proof of snapshot; creates a claim receipt and initializes
+seed state (including <code>lastObservedSeedOwner = snapshot
+owner</code>)</td>
 </tr>
 <tr class="even">
 <td>Phase 2 mint</td>
-<td>Standard mint with random ID assignment via rolling VRF batches;
-receipts resolved in monotonic order across and within batches</td>
+<td>Paid mint at 0.005 ETH per receipt; appended to the unified receipt
+list</td>
+</tr>
+<tr class="odd">
+<td>Phase 2 airdrop</td>
+<td>Owner-only, gas-only; appended to the unified receipt list,
+identical resolution semantics to paid mints</td>
+</tr>
+<tr class="even">
+<td>Reveal</td>
+<td>Seal then commit then reveal: receipt list seals on supply
+exhaustion or 14-day fallback; <code>reveal()</code> mixes four
+blockhashes from <code>sealedAtBlock + 8</code> through
+<code>sealedAtBlock + 11</code> into a single <code>revealSeed</code>;
+window opens at <code>sealedAtBlock + 13</code> and closes at
+<code>sealedAtBlock + 240</code>; <code>reseal()</code> resets the window
+if 240 blocks pass without reveal</td>
+</tr>
+<tr class="odd">
+<td>Resolution</td>
+<td>After reveal, anyone calls <code>resolveReceipts(count)</code> to
+pair receipts to Abnormie IDs via Fisher-Yates from the unclaimed pool,
+in strictly monotonic receipt-index order</td>
 </tr>
 <tr class="odd">
 <td>Cirrus (seed transfers)</td>
@@ -963,6 +1050,12 @@ the freeze-time snapshot stored on the Abnormie.</td>
 <td>All seed-derived inputs (cirrusCount, seedCustomized, seedBurned,
 Dead At block) snapshotted at freeze; subsequent pokes against the seed
 do not affect Static Abnormies’ renders or metadata</td>
+</tr>
+<tr class="even">
+<td>Treasury</td>
+<td>Phase 2 mint revenue accumulates in the contract until anyone calls
+permissionless <code>withdraw()</code> to push the balance to the
+immutable treasury address</td>
 </tr>
 </tbody>
 </table>
@@ -1096,10 +1189,20 @@ Cirrus↔︎Altocumulus)</li>
 <code>withdraw()</code> to that address</li>
 <li>Renderer topology: separable and immutable</li>
 <li>Phase 1 duration: 2 days, permissionless close</li>
-<li>Phase 1 reveal: single VRF call at phase close; receipts resolved in
-monotonic order</li>
-<li>Phase 2 reveal: rolling VRF batches closing on 100 mints OR 24
-hours; receipts resolved in monotonic order</li>
+<li>Phase 2 mint price: 0.005 ETH per Abnormie</li>
+<li>Owner airdrop available during Phase 2: gas-only, capped at 50
+receipts per call, any quantity total up to remaining supply</li>
+<li>Reveal mechanism: seal-then-commit-then-reveal, no oracle dependency.
+Seal triggered by supply exhaustion or by permissionless
+<code>sealForReveal()</code> 14 days after Phase 1 close.
+<code>reveal()</code> callable from <code>sealedAtBlock + 13</code>
+through <code>sealedAtBlock + 240</code>; mixes four blockhashes
+(<code>sealedAtBlock + 8</code> through <code>sealedAtBlock + 11</code>)
+into the seed. <code>reseal()</code> callable after the 240-block window
+expires unrevealed.</li>
+<li>Resolution: monotonic, permissionless, via
+<code>resolveReceipts(count)</code> over the unified Phase 1 plus Phase 2
+receipt list.</li>
 </ul>
 <h2 id="out-of-scope">Out of scope</h2>
 <ul>
@@ -1124,6 +1227,9 @@ address is immutable and the withdraw function is permissionless).</li>
 <li>Cancellation Rate trait (canvas conveys cancellation visually;
 counting total touches on-chain is expensive and the visible plateau
 already encodes the information).</li>
+<li>Oracle-based randomness for the reveal (Chainlink VRF and similar).
+The seal-then-commit-then-reveal flow uses EVM blockhashes only; no
+external service dependency.</li>
 </ul>
 <h2 id="naming-and-surface">Naming and surface</h2>
 <ul>
@@ -1137,6 +1243,27 @@ Nimbostratus</strong></li>
 </ul>
 <h2 id="changelog">Changelog</h2>
 <ul>
+<li><strong>v0.14</strong>: Reveal architecture replaced. Chainlink VRF
+v2.5 (rolling batches in Phase 2 and single call in Phase 1) is removed
+entirely. New mechanism is a single collection-wide
+seal-then-commit-then-reveal flow using EVM blockhashes for entropy:
+receipts seal on Phase 2 supply exhaustion or via permissionless
+<code>sealForReveal()</code> 14 days after Phase 1 close;
+<code>reveal()</code> mixes four blockhashes from
+<code>sealedAtBlock + 8</code> through <code>sealedAtBlock + 11</code>
+into the seed and is callable from <code>sealedAtBlock + 13</code>
+through <code>sealedAtBlock + 240</code>; <code>reseal()</code> restarts
+the window if reveal is not called in time. No oracle dependency; no LINK
+funding required. Owner airdrop added: gas-only mint of unminted Phase 2
+receipts to any address, capped at 50 per call. Phase 2 mint price
+lowered to 0.005 ETH to match Normies. Phase 1 and Phase 2 receipts
+unified into a single list resolved by <code>resolveReceipts(count)</code>
+in strictly monotonic order. Proposer-bias bound documented honestly: the
+final entropy block’s proposer can withhold for one conditional reroll at
+the cost of forfeited MEV; multi-block mixing prevents intermediate-block
+bias but does not fully eliminate proposer influence. For a
+small-fractional-stakes art project this is an acceptable bound. Mechanism
+otherwise unchanged from v0.13.</li>
 <li><strong>v0.13</strong>: Static-state snapshots clarified. The
 terminal-state rule on Axis 1 (Static Abnormies immune to future events)
 is now made explicit for all seed-derived render inputs:
