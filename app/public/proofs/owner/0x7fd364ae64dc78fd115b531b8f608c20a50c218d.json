@@ -1,0 +1,22 @@
+[
+  {
+    "normieId": 7868,
+    "ownerAtSnapshot": "0x7FD364ae64DC78fD115b531B8f608c20a50C218d",
+    "customizedAtSnapshot": false,
+    "proof": [
+      "0xc4be37f67b7afae0d0ecc6b538de174c77f388595ed69408dfc7e35658106892",
+      "0xf9e491cdf28f93ed0e9b0ce1c09ce6c4383dee43cde58df328ae1dff4e2555a6",
+      "0x7d1d49f95cf1c5def1ad0ad944a7ed7c96dddffa3a4369eb77ed859dbe058038",
+      "0xe0528ceb7c49cb70d5edb78dc85d65a96ce63ebafa8a49f67914eb66c5e697b8",
+      "0xcf2832cc5509349156231ea66b019da9066161ad670e8d6a108d1a63cf3f3622",
+      "0xbec72467dc15c94a97386ad8bd6a3deadd6c06bab0db5d1226db3950843678ab",
+      "0x191a3334ba6a1b2d27b0abadf6ecb0f934bdce61a7c105059fc93f70f2c8e4c8",
+      "0x3dd3efcf46d4ebc3c8ad233ed6adead68071d111ba5d894bf5df13b0a364ddeb",
+      "0xfe7d66592b2476c34eb552af1d5619afadb083278cb44fc5e9f7b60d86594025",
+      "0xceddf6c265d552aedd6998ae8601351e0cdffb14ac756a77505c7098bbf47fef",
+      "0x833a564e5004740534e691cb4ea645d327b30cc0b26309ad86a21ed632b5ed93",
+      "0xe4b35dccea2b1e7a4a046c1e919745f40b85f11cc3139c0330e102c7fad8a3d4",
+      "0xcb459f6d768d8c268ce0b21841e94336add65f98dbef64332da3e091a7f3e2c4"
+    ]
+  }
+]

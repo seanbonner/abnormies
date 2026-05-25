@@ -1,0 +1,15 @@
+{
+  "name": "abnormies-app",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "build-proofs": "node scripts/build-proofs.mjs",
+    "dev": "npm run build && cd dist && python3 -m http.server 8000"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "viem": "^2.21.55"
+  }
+}

@@ -1,0 +1,5 @@
+node_modules/
+dist/
+snapshot/*.json
+.env
+public/config.js

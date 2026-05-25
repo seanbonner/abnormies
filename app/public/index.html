@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Abnormies — Claim</title>
+<meta name="description" content="Abnormies Phase 1: 1:1 holder claim for Normies holders. Pre-reveal.">
+<link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+
+<div class="wrap">
+
+  <header>
+    <div class="wordmark">ABNORMIES</div>
+    <div class="tagline">Phase 1 · Claim</div>
+  </header>
+
+  <!-- Wallet bar -->
+  <div class="wallet-bar">
+    <button id="connect-btn" class="btn btn-outline">Connect</button>
+    <div class="wallet-info">
+      <span id="wallet-address" class="wallet-address">Not connected</span>
+      <span id="wallet-chain" class="wallet-chain"></span>
+    </div>
+    <div class="wallet-meta">
+      <div><span class="label">Expected</span><span id="expected-chain">—</span></div>
+      <div><span class="label">Supply</span><span id="progress-counter">—</span></div>
+    </div>
+    <button id="refresh-btn" class="btn btn-outline">Refresh</button>
+  </div>
+
+  <!-- Status banner -->
+  <div id="banner" class="banner" hidden></div>
+
+  <!-- Phase indicator -->
+  <div class="phase-indicator">
+    <span class="label">Status</span>
+    <span id="phase-label" class="phase-label">Loading…</span>
+  </div>
+
+  <!-- Claim section (Phase 1 only) -->
+  <section id="claim-section" class="panel" hidden>
+    <h2>Claim your Abnormies</h2>
+    <p class="section-note">Each eligible Normie you held at the snapshot can create one Phase 1 receipt, at gas cost. Abnormie IDs are assigned later, at reveal.</p>
+    <div id="claim-list"></div>
+    <div id="claim-empty" class="empty" hidden>No eligible Normies for this wallet in the snapshot.</div>
+  </section>
+
+  <!-- Mint section (Phase 2 only) -->
+  <section id="mint-section" class="panel" hidden>
+    <h2>Mint</h2>
+    <p class="section-note">Phase 2 public mint. Receipts resolve to Abnormie IDs after reveal.</p>
+    <div class="mint-controls">
+      <label>Count
+        <input id="mint-count" type="number" min="1" max="10" value="1" step="1">
+      </label>
+      <div class="mint-total">Total <span id="mint-total">—</span></div>
+      <button id="mint-btn" class="btn btn-primary">Mint</button>
+    </div>
+  </section>
+
+  <!-- My receipts (connected only) -->
+  <section id="receipts-section" class="panel" hidden>
+    <h2>My Receipts</h2>
+    <div id="receipts-list"></div>
+    <div id="receipts-empty" class="empty" hidden>No receipts yet.</div>
+  </section>
+
+  <div class="foot">
+    Pre-reveal claim/mint app. <a href="../spec.html">Specification</a> · <a href="../index.html">About</a>
+  </div>
+
+</div>
+
+<!-- config.js sets window.ABNORMIES_CONFIG and must load before the module. -->
+<script src="./config.js"></script>
+<script type="module" src="./main.js"></script>
+
+</body>
+</html>
