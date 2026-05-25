@@ -1,7 +1,7 @@
 ---
 title: "Abnormies: Production Spec"
 status: draft
-version: 0.14
+version: 0.15
 source_collection: Normies (Serc, Feb 2026)
 source_contract: 0x9eb6e2025b64f340691e424b7fe7022ffde12438
 agent_adapter: Adapter8004 (Premm, ERC-8217)
@@ -314,6 +314,8 @@ Over time, even Abnormies whose seed Normies were never customized will accumula
 
 When the Abnormie's owner is also the effective owner of the seed Normie's Adapter8004-bound agent, the canvas inverts at render time.
 
+When the same wallet holds both the Abnormie and its seed Normie AND the seed Normie has been awakened via Adapter8004, the Abnormie is **Aligned**. An Aligned Abnormie renders inverted.
+
 ### Why Adapter8004 simplifies the check
 
 Vanilla ERC-8004 mints a separate agent NFT, allowing the Normie and the agent to be owned by different addresses. Adapter8004 (ERC-8217, Premm) takes permanent custody of the agent NFT and binds it via on-chain metadata to the Normie. Selling the Normie atomically transfers control of the agent. **Owning the Normie is owning the agent.**
@@ -323,7 +325,7 @@ The inversion check reduces to two view-function reads against Abnormies state:
 1. Has the seed Normie been awakened? Read `seedAwakened[normieId]`, set on-chain via `pokeAwakening`, which verifies a user-supplied agentId via `Adapter8004.bindingOf`.
 2. Is `Abnormies.ownerOf(abnormieId) == Normies.ownerOf(normieId)`?
 
-Both true: inversion. No separate agent-wallet detection needed.
+Both true: the Abnormie is Aligned. No separate agent-wallet detection needed.
 
 ### Phase 1 vs Phase 2 alignment
 
@@ -342,7 +344,7 @@ The underlying event history and stored counters are unchanged. Inversion is a r
 
 1. **Different owners** (human owns Abnormie, someone else owns seed Normie): normal render.
 2. **Same owner, seed Normie not awakened** (collector holds both but hasn't registered the Normie through Adapter8004): normal render.
-3. **Same owner, seed Normie awakened** (the autobiographer holds its own autobiography): inverted render.
+3. **Same owner, seed Normie awakened** (the autobiographer holds its own autobiography): Aligned, inverted render.
 
 ## Architecture summary
 
@@ -480,6 +482,7 @@ Frontend deployed on Cloudflare Pages. Mirrored to IPFS, pointed at via ENS (`ab
 
 ## Changelog
 
+- **v0.15**: Named the inversion condition Aligned. Mechanism otherwise unchanged from v0.14.
 - **v0.14**: Reveal architecture replaced. Chainlink VRF v2.5 (rolling batches in Phase 2 and single call in Phase 1) is removed entirely. New mechanism is a single collection-wide seal-then-commit-then-reveal flow using EVM blockhashes for entropy: receipts seal on Phase 2 supply exhaustion or via permissionless `sealForReveal()` 14 days after Phase 1 close; `reveal()` mixes four blockhashes from `sealedAtBlock + 8` through `sealedAtBlock + 11` into the seed and is callable from `sealedAtBlock + 13` through `sealedAtBlock + 240`; `reseal()` restarts the window if reveal is not called in time. No oracle dependency; no LINK funding required. Owner airdrop added: gas-only mint of unminted Phase 2 receipts to any address, capped at 50 per call. Phase 2 mint price lowered to 0.005 ETH to match Normies. Phase 1 and Phase 2 receipts unified into a single list resolved by `resolveReceipts(count)` in strictly monotonic order. Proposer-bias bound documented honestly: the final entropy block's proposer can withhold for one conditional reroll at the cost of forfeited MEV; multi-block mixing prevents intermediate-block bias but does not fully eliminate proposer influence. For a small-fractional-stakes art project this is an acceptable bound. Mechanism otherwise unchanged from v0.13.
 - **v0.13**: Static-state snapshots clarified. The terminal-state rule on Axis 1 (Static Abnormies immune to future events) is now made explicit for all seed-derived render inputs: `cirrusCount`, `seedCustomized`, `seedBurned`, and `Dead At` block are each snapshotted into per-Abnormie storage at the moment of freeze. Source Life and the Dead At trait read from these snapshots for Static Abnormies and from live seed state for Active Abnormies. Cirrus counter behavior added: saturates at `uint16.max` rather than reverting, preserving liveness of pokes and Abnormie transfers in the extreme edge case. Phase 1 and Phase 2 reveal resolution clarified: receipts are resolved in strictly monotonic order to prevent reordering attacks against the public VRF seed. Thunder and Lightning inline-poke both the burner's seed and the freeze target's seed at action time to ensure all checks and snapshots operate on the latest observable seed state. Cancellation Rate trait removed; counting total touches on-chain is expensive and the canvas already conveys cancellation visually. Mechanism otherwise unchanged from v0.12.
 - **v0.12**: Awakening flow correction. The `agentIdForBinding` reverse-lookup function documented at `adapter8004.xyz/docs/contract` is not present on the deployed Adapter8004 implementation (verified by mainnet-fork testing). `pokeAwakening` therefore takes a caller-supplied `agentId` and verifies the binding via `bindingOf(agentId)`. The frontend resolves the agentId off-chain via `api.normies.art/agents/binding/{normieId}` and embeds it in the transaction; users never enter or see an agentId. Treasury added: an immutable address set at deploy receives Phase 2 mint revenue via a permissionless `withdraw()` function. Treasury and royalty receiver are independent constructor parameters and may be the same or different. Note added that awakening and customization are independent signals and should not be treated as proxies. Phase 1 `lastObservedSeedOwner` initialization made explicit in the architecture summary. Mechanism otherwise unchanged from v0.11.
