@@ -6,3 +6,7 @@
 node_modules/
 .wrangler/
 prototype.html
+
+# Source snapshots are regenerable and throwaway (Sepolia now, mainnet later).
+# Commit the derived proofs/ output instead — that is the runtime + verifiable artifact.
+app/snapshot/snapshot-*.json
