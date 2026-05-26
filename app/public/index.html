@@ -44,8 +44,12 @@
     <h2>Claim your Abnormies</h2>
     <p class="section-note">Each Normie you held at the snapshot can create one Phase 1 receipt, at gas cost.</p>
     <div class="delegate-disclosure">
-      <p class="delegate-note">Claiming on behalf of another wallet? Enter the vault address below.</p>
-      <input id="vault-input" class="vault-input" type="text" autocomplete="off" spellcheck="false"
+      <p id="delegate-note" class="delegate-note">Claiming on behalf of another wallet? Enter the vault address below.</p>
+      <select id="vault-select" class="vault-select">
+        <option value="">Claim for myself (default)</option>
+        <option value="__manual__">Enter another address manually…</option>
+      </select>
+      <input id="vault-input" class="vault-input" type="text" autocomplete="off" spellcheck="false" hidden
         placeholder="0x… (leave blank if claiming for yourself)">
       <p id="vault-error" class="vault-error" hidden></p>
     </div>
@@ -71,10 +75,10 @@
   <!-- My Abnormies (connected only) -->
   <section id="receipts-section" class="panel" hidden>
     <h2>My Abnormies</h2>
-    <p class="section-note">Receipts are owned by the wallet they were claimed for. To see receipts claimed on behalf of a vault, connect with that vault wallet.</p>
+    <p id="receipts-subtitle" class="section-note" hidden></p>
     <p class="section-note">Token IDs and seed Normie pairings are both assigned at reveal.</p>
     <div id="receipts-list"></div>
-    <div id="receipts-empty" class="empty" hidden>No receipts yet.</div>
+    <div id="receipts-empty" class="empty" hidden>Nothing to show yet.</div>
   </section>
 
   <div class="foot">

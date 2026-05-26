@@ -296,6 +296,18 @@ header { margin-bottom: 28px; }
 /* Delegated (vault) claim */
 .delegate-disclosure { margin-bottom: 16px; }
 .delegate-note { font-size: 13px; color: var(--muted); margin-bottom: 8px; }
+.vault-select {
+  width: 100%;
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-size: 13px;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  margin-bottom: 8px;
+}
+.vault-select:focus { outline: none; border-color: var(--text); }
+.vault-select:disabled { color: var(--muted); }
 .vault-input {
   width: 100%;
   font-family: ui-monospace, "SF Mono", Consolas, monospace;

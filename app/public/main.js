@@ -28,6 +28,34 @@ const expectedChainId = Number(cfg.chainId || 1);
 const chain = CHAINS[expectedChainId] || sepolia;
 const contractAddress = cfg.contractAddress;
 
+// delegate.xyz v2 registry (same address on every network it deploys to).
+const DELEGATE_REGISTRY = "0x00000000000000447e69651d841bD8D104Bed493";
+const ZERO_BYTES32 = "0x0000000000000000000000000000000000000000000000000000000000000000";
+const DELEGATION_TYPE = { ALL: 1, CONTRACT: 2 }; // subset of delegate.xyz v2's enum
+const DELEGATE_REGISTRY_ABI = [
+  {
+    type: "function",
+    name: "getIncomingDelegations",
+    stateMutability: "view",
+    inputs: [{ name: "to", type: "address" }],
+    outputs: [
+      {
+        name: "delegations",
+        type: "tuple[]",
+        components: [
+          { name: "type_", type: "uint8" },
+          { name: "to", type: "address" },
+          { name: "from", type: "address" },
+          { name: "rights", type: "bytes32" },
+          { name: "contract_", type: "address" },
+          { name: "tokenId", type: "uint256" },
+          { name: "amount", type: "uint256" }
+        ]
+      }
+    ]
+  }
+];
+
 let abi = null;
 let publicClient = null;
 let reader = null; // getContract bound to the public client
@@ -45,6 +73,8 @@ let eligibleShard = null; // proof shard for the current claim target (or null)
 let claimInFlight = false;
 let claimVault = null; // checksummed vault address when delegate-claiming, else null
 let vaultInvalid = false; // true when the vault field holds a malformed address
+let discoveredVaults = []; // vaults that have delegated to the connected wallet for Abnormies
+let delegationsAccount = null; // account the vault dropdown was last populated for
 
 // ---------------------------------------------------------------------------
 // DOM helpers
@@ -90,6 +120,7 @@ async function init() {
   $("mint-btn").addEventListener("click", onMintClick);
   $("claim-btn").addEventListener("click", onClaimAll);
   $("vault-input").addEventListener("input", onVaultInput);
+  $("vault-select").addEventListener("change", onVaultSelect);
 
   if (!contractAddress || !isAddress(contractAddress)) {
     showBanner("error", "No contract address configured. Set FRONTEND_CONTRACT_ADDRESS and rebuild.");
@@ -204,8 +235,10 @@ async function refreshAll() {
   }
 
   if (account) {
+    if (currentPhase === 0) await loadDelegations();
     await Promise.allSettled([loadEligible(), loadReceipts()]);
   } else {
+    resetVaultPicker();
     $("receipts-section").hidden = true;
     $("claim-list").innerHTML = "";
     $("claim-btn").hidden = true;
@@ -426,36 +459,162 @@ function normalizeVault(value) {
   return null; // mixed-case with a bad checksum
 }
 
-// Vault field changed: validate, set the claim target, and re-run eligibility.
-function onVaultInput() {
-  const v = $("vault-input").value.trim();
-  const err = $("vault-error");
+// Resolve the active target from the dropdown + optional text input. A concrete vault
+// chosen in the dropdown wins; otherwise the visible text input governs; otherwise self.
+function resolveVaultTarget() {
+  const select = $("vault-select");
+  const input = $("vault-input");
 
-  if (v === "") {
-    claimVault = null;
-    vaultInvalid = false;
-    err.hidden = true;
-    loadEligible();
-    return;
+  if (!select.hidden && select.value && select.value !== "__manual__") {
+    return { vault: getAddress(select.value), invalid: false };
   }
+  if (!input.hidden) {
+    const v = input.value.trim();
+    if (v === "") return { vault: null, invalid: false };
+    const norm = normalizeVault(v);
+    return norm ? { vault: norm, invalid: false } : { vault: null, invalid: true };
+  }
+  return { vault: null, invalid: false };
+}
 
-  const norm = normalizeVault(v);
-  if (!norm) {
-    claimVault = null;
-    vaultInvalid = true;
+// Apply the resolved target to state + inline error, then refresh both lists.
+function applyVaultTarget() {
+  const { vault, invalid } = resolveVaultTarget();
+  claimVault = vault;
+  vaultInvalid = invalid;
+  const err = $("vault-error");
+  if (invalid) {
     err.hidden = false;
     err.textContent = "Enter a valid address (checksummed or all-lowercase).";
-    $("claim-btn").hidden = true;
-    $("claim-list").innerHTML = "";
-    $("claim-empty").hidden = true;
-    eligibleShard = null;
+  } else {
+    err.hidden = true;
+  }
+  loadEligible();
+  loadReceipts();
+}
+
+// Text input changed.
+function onVaultInput() {
+  applyVaultTarget();
+}
+
+// Dropdown changed: manage text-input visibility, then apply the target.
+function onVaultSelect() {
+  const select = $("vault-select");
+  const input = $("vault-input");
+  // Text input shows for the no-delegations fallback or when "manual" is chosen.
+  const inputVisible = discoveredVaults.length === 0 || select.value === "__manual__";
+  input.hidden = !inputVisible;
+  if (select.value === "__manual__") input.focus();
+  applyVaultTarget();
+}
+
+// Reset the picker to its disconnected default (self only, no discovered vaults).
+function resetVaultPicker() {
+  discoveredVaults = [];
+  delegationsAccount = null;
+  claimVault = null;
+  vaultInvalid = false;
+  const select = $("vault-select");
+  select.hidden = false;
+  select.disabled = false;
+  select.innerHTML =
+    '<option value="">Claim for myself (default)</option><option value="__manual__">Enter another address manually…</option>';
+  select.value = "";
+  $("vault-input").hidden = true;
+  $("vault-input").value = "";
+  $("vault-error").hidden = true;
+  $("delegate-note").textContent = "Claiming on behalf of another wallet? Enter the vault address below.";
+}
+
+// Query delegate.xyz v2 for vaults that have delegated to the connected wallet for
+// Abnormies (type ALL, or CONTRACT scoped to this contract, with rights == 0) and
+// populate the dropdown. On failure, silently fall back to the manual text input.
+async function loadDelegations() {
+  if (delegationsAccount === account) return; // already populated for this account
+
+  const select = $("vault-select");
+  const input = $("vault-input");
+  const note = $("delegate-note");
+
+  select.hidden = false;
+  select.disabled = true;
+  select.innerHTML = "<option>Checking delegations…</option>";
+  input.hidden = true;
+  $("vault-error").hidden = true;
+
+  let vaults = [];
+  let failed = false;
+  try {
+    const delegations = await publicClient.readContract({
+      address: DELEGATE_REGISTRY,
+      abi: DELEGATE_REGISTRY_ABI,
+      functionName: "getIncomingDelegations",
+      args: [account]
+    });
+    const seen = new Set();
+    for (const d of delegations) {
+      const t = Number(d.type_);
+      const typeOk =
+        t === DELEGATION_TYPE.ALL ||
+        (t === DELEGATION_TYPE.CONTRACT && d.contract_.toLowerCase() === contractAddress.toLowerCase());
+      const rightsOk = d.rights.toLowerCase() === ZERO_BYTES32;
+      if (typeOk && rightsOk) {
+        const v = getAddress(d.from);
+        if (!seen.has(v.toLowerCase())) {
+          seen.add(v.toLowerCase());
+          vaults.push(v);
+        }
+      }
+    }
+  } catch (e) {
+    failed = true;
+    console.warn("delegate.xyz getIncomingDelegations failed; falling back to manual input:", e);
+  }
+
+  discoveredVaults = vaults;
+  delegationsAccount = account;
+  claimVault = null;
+  vaultInvalid = false;
+
+  if (failed) {
+    // Silent fallback: behave like the manual-text-input-only UX.
+    select.hidden = true;
+    select.disabled = false;
+    input.hidden = false;
+    input.value = "";
+    note.textContent = "Claiming on behalf of another wallet? Enter the vault address below.";
     return;
   }
 
-  claimVault = norm;
-  vaultInvalid = false;
-  err.hidden = true;
-  loadEligible();
+  select.disabled = false;
+  select.innerHTML = "";
+  const optSelf = document.createElement("option");
+  optSelf.value = "";
+  optSelf.textContent = "Claim for myself (default)";
+  select.appendChild(optSelf);
+  for (const v of vaults) {
+    const o = document.createElement("option");
+    o.value = v;
+    o.textContent = short(v);
+    select.appendChild(o);
+  }
+  const optManual = document.createElement("option");
+  optManual.value = "__manual__";
+  optManual.textContent = "Enter another address manually…";
+  select.appendChild(optManual);
+  select.value = "";
+  input.value = "";
+  $("vault-error").hidden = true;
+
+  if (vaults.length > 0) {
+    note.textContent = "Claim for a wallet that's delegated to you. Choose a vault below.";
+    input.hidden = true;
+  } else {
+    // No delegations found: keep the dropdown (self + manual) and expose the text input.
+    note.textContent = "Claiming on behalf of another wallet? Enter the vault address below.";
+    input.hidden = false;
+  }
 }
 
 // Loads eligible Normies for the current claim target: the vault address when set,
@@ -647,16 +806,33 @@ async function onClaimAll() {
 }
 
 // ---------------------------------------------------------------------------
-// Receipts (connected wallet)
+// My Abnormies (Unrevealed)
 // ---------------------------------------------------------------------------
 // No per-owner receipt index exists on-chain, so we scan receiptsLength() and
-// filter receiptAt(i) by claimant. Batched via multicall (Multicall3).
+// filter receiptAt(i) by claimant against the active target (the selected vault
+// when set, otherwise the connected wallet). Token IDs aren't assigned until
+// reveal, so each holding renders as "[unrevealed]". Batched via Multicall3.
 async function loadReceipts() {
   const section = $("receipts-section");
   const listEl = $("receipts-list");
   const empty = $("receipts-empty");
+  const subtitle = $("receipts-subtitle");
   section.hidden = false;
-  listEl.innerHTML = "<div class='loading'>Loading receipts…</div>";
+
+  const target = claimVault || account;
+  if (!target) {
+    section.hidden = true;
+    return;
+  }
+
+  if (claimVault) {
+    subtitle.hidden = false;
+    subtitle.textContent = `Showing Unrevealed Abnormies for ${short(claimVault)}`;
+  } else {
+    subtitle.hidden = true;
+  }
+
+  listEl.innerHTML = "<div class='loading'>Loading Unrevealed Abnormies…</div>";
   empty.hidden = true;
 
   let len = 0;
@@ -665,18 +841,19 @@ async function loadReceipts() {
   } catch {
     listEl.innerHTML = "";
     empty.hidden = false;
-    empty.textContent = "Could not read receipts.";
+    empty.textContent = "Could not load Unrevealed Abnormies.";
     return;
   }
 
   if (len === 0) {
     listEl.innerHTML = "";
     empty.hidden = false;
-    empty.textContent = "No receipts yet.";
+    empty.textContent = "Nothing to show yet.";
     return;
   }
 
-  const mine = [];
+  const targetLower = target.toLowerCase();
+  let count = 0;
   const CHUNK = 400;
   for (let start = 0; start < len; start += CHUNK) {
     const end = Math.min(start + CHUNK, len);
@@ -701,30 +878,25 @@ async function loadReceipts() {
 
     results.forEach((r) => {
       if (r.status !== "success") return;
-      // Receipt: (claimant, normieId, fromPhase1, snapshotCustomized, resolved, abnormieId).
-      // We only need the claimant: token IDs and seed pairings aren't assigned
-      // until reveal, so every owned receipt renders as "[unrevealed]".
-      const claimant = r.result[0];
-      if (claimant.toLowerCase() === account.toLowerCase()) {
-        mine.push(true);
-      }
+      // Receipt tuple: (claimant, normieId, fromPhase1, snapshotCustomized, resolved, abnormieId).
+      if (r.result[0].toLowerCase() === targetLower) count++;
     });
   }
 
-  if (mine.length === 0) {
+  if (count === 0) {
     listEl.innerHTML = "";
     empty.hidden = false;
-    empty.textContent = "No receipts for this wallet.";
+    empty.textContent = "Nothing to show yet.";
     return;
   }
 
   listEl.innerHTML = "";
-  mine.forEach(() => {
+  for (let i = 0; i < count; i++) {
     const row = document.createElement("div");
     row.className = "receipt-row";
     row.innerHTML = `<span class="receipt-status">[unrevealed]</span>`;
     listEl.appendChild(row);
-  });
+  }
 }
 
 window.addEventListener("DOMContentLoaded", () => {
