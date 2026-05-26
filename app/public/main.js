@@ -505,12 +505,14 @@ async function loadReceipts() {
       }
     }
 
-    results.forEach((r, k) => {
+    results.forEach((r) => {
       if (r.status !== "success") return;
-      // Receipt: (claimant, normieId, fromPhase1, snapshotCustomized, resolved, abnormieId)
-      const [claimant, , fromPhase1, , resolved, abnormieId] = r.result;
+      // Receipt: (claimant, normieId, fromPhase1, snapshotCustomized, resolved, abnormieId).
+      // We only need the claimant: token IDs and seed pairings aren't assigned
+      // until reveal, so every owned receipt renders as "[unrevealed]".
+      const claimant = r.result[0];
       if (claimant.toLowerCase() === account.toLowerCase()) {
-        mine.push({ index: start + k, fromPhase1, resolved, abnormieId: Number(abnormieId) });
+        mine.push(true);
       }
     });
   }
@@ -523,13 +525,10 @@ async function loadReceipts() {
   }
 
   listEl.innerHTML = "";
-  mine.forEach((m) => {
+  mine.forEach(() => {
     const row = document.createElement("div");
     row.className = "receipt-row";
-    const status = m.resolved ? `Revealed → Abnormie #${m.abnormieId}` : "Unrevealed";
-    row.innerHTML = `<span class="receipt-id">Receipt #${m.index}</span>
-      <span class="badge">${m.fromPhase1 ? "Phase 1" : "Phase 2"}</span>
-      <span class="receipt-status">${status}</span>`;
+    row.innerHTML = `<span class="receipt-status">[unrevealed]</span>`;
     listEl.appendChild(row);
   });
 }
