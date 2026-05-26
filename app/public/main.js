@@ -1,9 +1,10 @@
-// Abnormies Phase 1 app — read paths wired, write paths stubbed.
+// Abnormies Phase 1 app.
 //
 // Reads contract state with viem (public client over the configured RPC) and
 // the connected wallet's eligible Normies (from prebuilt proof shards) and
-// receipts. Claim and mint are intentionally STUBBED; see onClaimClick /
-// onMintClick. All function names below were taken from the deployed ABI.
+// receipts. The Phase 1 claim write path is wired (onClaimAll); the Phase 2
+// mint write path is still STUBBED (see onMintClick). Function names are taken
+// from the deployed ABI.
 
 import {
   createPublicClient,
@@ -37,6 +38,8 @@ let listenersAttached = false;
 let currentPhase = null;
 let mintPrice = 0n;
 let maxPerCall = 50n;
+let eligibleShard = null; // proof shard for the connected wallet (or null)
+let claimInFlight = false;
 
 // ---------------------------------------------------------------------------
 // DOM helpers
@@ -54,6 +57,12 @@ function hideBanner() {
 }
 const short = (a) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 
+// Mirrors EtherPool's describeError: surface the most human-readable field.
+function describeError(err) {
+  if (!err) return "Unknown error.";
+  return err.shortMessage || err.details || err.message || String(err);
+}
+
 // ---------------------------------------------------------------------------
 // Init
 // ---------------------------------------------------------------------------
@@ -63,6 +72,7 @@ async function init() {
   $("refresh-btn").addEventListener("click", refreshAll);
   $("mint-count").addEventListener("input", updateMintTotal);
   $("mint-btn").addEventListener("click", onMintClick);
+  $("claim-btn").addEventListener("click", onClaimAll);
 
   if (!contractAddress || !isAddress(contractAddress)) {
     showBanner("error", "No contract address configured. Set FRONTEND_CONTRACT_ADDRESS and rebuild.");
@@ -180,9 +190,16 @@ async function refreshAll() {
     await Promise.allSettled([loadEligible(), loadReceipts()]);
   } else {
     $("receipts-section").hidden = true;
-    $("claim-empty").hidden = true;
-    $("claim-list").innerHTML =
-      currentPhase === 0 ? "<div class='note'>Connect your wallet to check Phase 1 eligibility.</div>" : "";
+    $("claim-list").innerHTML = "";
+    $("claim-btn").hidden = true;
+    eligibleShard = null;
+    const empty = $("claim-empty");
+    if (currentPhase === 0) {
+      empty.hidden = false;
+      empty.textContent = "Connect a wallet to see your eligible Normies.";
+    } else {
+      empty.hidden = true;
+    }
   }
 }
 
@@ -264,40 +281,9 @@ function onMintClick() {
 // ---------------------------------------------------------------------------
 // Eligible Normies (Phase 1)
 // ---------------------------------------------------------------------------
-async function loadEligible() {
-  if (currentPhase !== 0) {
-    $("claim-list").innerHTML = "";
-    return;
-  }
-  const list = $("claim-list");
-  const empty = $("claim-empty");
-  list.innerHTML = "<div class='loading'>Loading eligible Normies…</div>";
-  empty.hidden = true;
-
-  let shard = null;
-  try {
-    const res = await fetch(`./proofs/owner/${account.toLowerCase()}.json`);
-    if (res.status === 404) {
-      list.innerHTML = "";
-      empty.hidden = false;
-      return;
-    }
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    shard = await res.json();
-  } catch {
-    list.innerHTML = "";
-    empty.hidden = false;
-    return;
-  }
-
-  if (!Array.isArray(shard) || shard.length === 0) {
-    list.innerHTML = "";
-    empty.hidden = false;
-    return;
-  }
-
-  // Already-claimed status per Normie (claimed(normieId)).
-  let claimedFlags;
+// Reads claimed(normieId) for every leaf in a shard. Batched via Multicall3,
+// with a sequential fallback. Returns a boolean[] aligned to the shard.
+async function readClaimedFlags(shard) {
   try {
     const results = await publicClient.multicall({
       contracts: shard.map((s) => ({
@@ -307,49 +293,163 @@ async function loadEligible() {
         args: [BigInt(s.normieId)]
       }))
     });
-    claimedFlags = results.map((r) => (r.status === "success" ? Boolean(r.result) : false));
+    return results.map((r) => (r.status === "success" ? Boolean(r.result) : false));
   } catch {
-    claimedFlags = await Promise.all(
-      shard.map((s) => reader.read.claimed([BigInt(s.normieId)]).catch(() => false))
-    );
+    return Promise.all(shard.map((s) => reader.read.claimed([BigInt(s.normieId)]).catch(() => false)));
+  }
+}
+
+async function loadEligible() {
+  const list = $("claim-list");
+  const empty = $("claim-empty");
+  const btn = $("claim-btn");
+  btn.hidden = true;
+
+  if (currentPhase !== 0) {
+    list.innerHTML = "";
+    empty.hidden = true;
+    eligibleShard = null;
+    return;
+  }
+  if (!account) {
+    list.innerHTML = "";
+    eligibleShard = null;
+    empty.hidden = false;
+    empty.textContent = "Connect a wallet to see your eligible Normies.";
+    return;
   }
 
+  list.innerHTML = "<div class='loading'>Loading eligible Normies…</div>";
+  empty.hidden = true;
+
+  let shard = null;
+  try {
+    const res = await fetch(`./proofs/owner/${account.toLowerCase()}.json`);
+    if (res.status === 404) {
+      list.innerHTML = "";
+      eligibleShard = null;
+      empty.hidden = false;
+      empty.textContent = "Your wallet was not a Normies holder at the snapshot block.";
+      return;
+    }
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    shard = await res.json();
+  } catch (err) {
+    list.innerHTML = "";
+    eligibleShard = null;
+    empty.hidden = true;
+    showBanner("error", `Could not load your eligibility. ${describeError(err)} Retry with Refresh.`);
+    return;
+  }
+
+  if (!Array.isArray(shard) || shard.length === 0) {
+    list.innerHTML = "";
+    eligibleShard = null;
+    empty.hidden = false;
+    empty.textContent = "Your wallet was not a Normies holder at the snapshot block.";
+    return;
+  }
+
+  eligibleShard = shard;
+  const claimedFlags = await readClaimedFlags(shard);
+
   list.innerHTML = "";
+  let unclaimed = 0;
   shard.forEach((s, i) => {
+    if (!claimedFlags[i]) unclaimed++;
     const row = document.createElement("div");
     row.className = "claim-row";
     row.innerHTML = `<span class="normie-id">Normie #${s.normieId}</span>
       <span class="badge">${s.customizedAtSnapshot ? "Customized" : "Uncustomized"}</span>`;
-    const btn = document.createElement("button");
     if (claimedFlags[i]) {
-      btn.className = "btn btn-disabled btn-sm";
-      btn.textContent = "Claimed";
-      btn.disabled = true;
-    } else {
-      btn.className = "btn btn-primary btn-sm";
-      btn.textContent = "Claim";
-      btn.addEventListener("click", () => onClaimClick(s));
+      const badge = document.createElement("span");
+      badge.className = "badge badge-claimed";
+      badge.textContent = "Already claimed";
+      row.appendChild(badge);
     }
-    row.appendChild(btn);
     list.appendChild(row);
   });
+
+  if (unclaimed === 0) {
+    empty.hidden = false;
+    empty.textContent = "You have claimed all eligible Normies.";
+    btn.hidden = true;
+  } else {
+    empty.hidden = true;
+    btn.hidden = false;
+    btn.textContent = `Claim ${unclaimed} ${unclaimed === 1 ? "Normie" : "Normies"}`;
+    // Gating: enabled only on the expected chain and when no claim is in flight.
+    const wrongChain = walletChainId != null && walletChainId !== expectedChainId;
+    btn.disabled = wrongChain || claimInFlight;
+  }
 }
 
-function onClaimClick(leaf) {
-  // STUB: write path not wired yet.
-  // claim() takes parallel arrays; here we claim a single leaf.
-  // TODO(write): await walletClient.writeContract({
-  //   address: contractAddress, abi, functionName: "claim",
-  //   args: [[BigInt(leaf.normieId)], [leaf.customizedAtSnapshot], [leaf.proof]],
-  // });  // caller must equal ownerAtSnapshot on every leaf
-  const payload = {
-    functionName: "claim",
-    normieIds: [leaf.normieId],
-    customizedFlags: [leaf.customizedAtSnapshot],
-    proofs: [leaf.proof]
-  };
-  console.log("[STUB] claim payload:", payload);
-  showBanner("ok", `Claim stubbed for Normie #${leaf.normieId}. Proof logged to console; write path not wired yet.`);
+// Bulk claim: every unclaimed eligible Normie in a single tx. No per-Normie buttons.
+async function onClaimAll() {
+  const btn = $("claim-btn");
+  if (!walletClient || !account) {
+    showBanner("error", "Connect a wallet first.");
+    return;
+  }
+  if (currentPhase !== 0) {
+    showBanner("warn", "Claiming is only open in Phase 1.");
+    return;
+  }
+  if (walletChainId != null && walletChainId !== expectedChainId) {
+    showBanner("warn", `Switch your wallet to ${CHAIN_NAMES[expectedChainId] || expectedChainId} (chainId ${expectedChainId}) to claim.`);
+    return;
+  }
+  if (!eligibleShard || eligibleShard.length === 0) return;
+
+  const originalLabel = btn.textContent;
+  claimInFlight = true;
+  btn.disabled = true;
+  $("refresh-btn").disabled = true;
+  btn.textContent = "Checking…";
+
+  try {
+    // 1. Re-read claimed() immediately before the call; filter to unclaimed.
+    const claimedFlags = await readClaimedFlags(eligibleShard);
+    const unclaimed = eligibleShard.filter((_, i) => !claimedFlags[i]);
+
+    // 2. Race: everything was claimed since the last refresh.
+    if (unclaimed.length === 0) {
+      showBanner("warn", "Already claimed.");
+      await loadEligible();
+      return;
+    }
+
+    // 3. Parallel-indexed arrays. Proof hex strings pass through to viem as-is.
+    const normieIds = unclaimed.map((s) => BigInt(s.normieId));
+    const customizedFlags = unclaimed.map((s) => Boolean(s.customizedAtSnapshot));
+    const proofs = unclaimed.map((s) => s.proof);
+
+    // 4. One tx for the whole batch (whales included; ~8k gas per Normie).
+    btn.textContent = "Confirm in wallet…";
+    const hash = await walletClient.writeContract({
+      address: contractAddress,
+      abi,
+      functionName: "claim",
+      args: [normieIds, customizedFlags, proofs],
+      account
+    });
+    btn.textContent = "Waiting for confirmation…";
+    await publicClient.waitForTransactionReceipt({ hash });
+
+    // 5. Success: refresh phase state, receipts, and per-Normie claimed status.
+    claimInFlight = false; // let the post-claim refresh render an accurate button
+    showBanner("ok", `Claimed ${unclaimed.length} ${unclaimed.length === 1 ? "Normie" : "Normies"}.`);
+    await refreshPhaseAndSupply();
+    await Promise.allSettled([loadEligible(), loadReceipts()]);
+  } catch (err) {
+    // 6. Failure: surface the reason and re-enable the button.
+    showBanner("error", `Claim failed. ${describeError(err)}`);
+    btn.textContent = originalLabel;
+    btn.disabled = false;
+  } finally {
+    claimInFlight = false;
+    $("refresh-btn").disabled = false;
+  }
 }
 
 // ---------------------------------------------------------------------------

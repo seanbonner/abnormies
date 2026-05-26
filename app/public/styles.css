@@ -289,6 +289,9 @@ header { margin-bottom: 28px; }
 }
 
 .claim-row .btn { margin-left: auto; }
+.claim-row .badge-claimed { margin-left: auto; color: var(--muted); }
+
+#claim-btn { margin-bottom: 16px; }
 
 .badge {
   font-family: ui-monospace, "SF Mono", Consolas, monospace;
