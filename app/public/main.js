@@ -15,7 +15,8 @@ import {
   parseEther,
   isAddress,
   getAddress,
-  getContract
+  getContract,
+  zeroAddress
 } from "viem";
 import { mainnet, sepolia } from "viem/chains";
 
@@ -38,8 +39,10 @@ let listenersAttached = false;
 let currentPhase = null;
 let mintPrice = 0n;
 let maxPerCall = 50n;
-let eligibleShard = null; // proof shard for the connected wallet (or null)
+let eligibleShard = null; // proof shard for the current claim target (or null)
 let claimInFlight = false;
+let claimVault = null; // checksummed vault address when delegate-claiming, else null
+let vaultInvalid = false; // true when the vault field holds a malformed address
 
 // ---------------------------------------------------------------------------
 // DOM helpers
@@ -63,6 +66,17 @@ function describeError(err) {
   return err.shortMessage || err.details || err.message || String(err);
 }
 
+// Walks the viem error cause chain to detect the contract's InvalidDelegation() revert.
+function isInvalidDelegation(err) {
+  let e = err;
+  while (e) {
+    if (e.data?.errorName === "InvalidDelegation") return true;
+    if (typeof e.message === "string" && e.message.includes("InvalidDelegation")) return true;
+    e = e.cause;
+  }
+  return false;
+}
+
 // ---------------------------------------------------------------------------
 // Init
 // ---------------------------------------------------------------------------
@@ -73,6 +87,7 @@ async function init() {
   $("mint-count").addEventListener("input", updateMintTotal);
   $("mint-btn").addEventListener("click", onMintClick);
   $("claim-btn").addEventListener("click", onClaimAll);
+  $("vault-input").addEventListener("input", onVaultInput);
 
   if (!contractAddress || !isAddress(contractAddress)) {
     showBanner("error", "No contract address configured. Set FRONTEND_CONTRACT_ADDRESS and rebuild.");
@@ -299,6 +314,48 @@ async function readClaimedFlags(shard) {
   }
 }
 
+// Accepts a checksummed or all-lowercase address; returns the checksummed form, or null.
+function normalizeVault(value) {
+  if (!/^0x[0-9a-fA-F]{40}$/.test(value)) return null;
+  if (value === value.toLowerCase()) return getAddress(value); // all-lowercase is fine
+  if (isAddress(value, { strict: true })) return getAddress(value); // correct checksum is fine
+  return null; // mixed-case with a bad checksum
+}
+
+// Vault field changed: validate, set the claim target, and re-run eligibility.
+function onVaultInput() {
+  const v = $("vault-input").value.trim();
+  const err = $("vault-error");
+
+  if (v === "") {
+    claimVault = null;
+    vaultInvalid = false;
+    err.hidden = true;
+    loadEligible();
+    return;
+  }
+
+  const norm = normalizeVault(v);
+  if (!norm) {
+    claimVault = null;
+    vaultInvalid = true;
+    err.hidden = false;
+    err.textContent = "Enter a valid address (checksummed or all-lowercase).";
+    $("claim-btn").hidden = true;
+    $("claim-list").innerHTML = "";
+    $("claim-empty").hidden = true;
+    eligibleShard = null;
+    return;
+  }
+
+  claimVault = norm;
+  vaultInvalid = false;
+  err.hidden = true;
+  loadEligible();
+}
+
+// Loads eligible Normies for the current claim target: the vault address when set,
+// otherwise the connected wallet.
 async function loadEligible() {
   const list = $("claim-list");
   const empty = $("claim-empty");
@@ -306,6 +363,13 @@ async function loadEligible() {
   btn.hidden = true;
 
   if (currentPhase !== 0) {
+    list.innerHTML = "";
+    empty.hidden = true;
+    eligibleShard = null;
+    return;
+  }
+  if (vaultInvalid) {
+    // Malformed vault address; onVaultInput already surfaced the inline error.
     list.innerHTML = "";
     empty.hidden = true;
     eligibleShard = null;
@@ -319,17 +383,23 @@ async function loadEligible() {
     return;
   }
 
+  const isVault = claimVault != null;
+  const target = isVault ? claimVault : account;
+  const notHolderMsg = isVault
+    ? "No eligible Normies for that address."
+    : "Your wallet was not a Normies holder at the snapshot block.";
+
   list.innerHTML = "<div class='loading'>Loading eligible Normies…</div>";
   empty.hidden = true;
 
   let shard = null;
   try {
-    const res = await fetch(`./proofs/owner/${account.toLowerCase()}.json`);
+    const res = await fetch(`./proofs/owner/${target.toLowerCase()}.json`);
     if (res.status === 404) {
       list.innerHTML = "";
       eligibleShard = null;
       empty.hidden = false;
-      empty.textContent = "Your wallet was not a Normies holder at the snapshot block.";
+      empty.textContent = notHolderMsg;
       return;
     }
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -338,7 +408,7 @@ async function loadEligible() {
     list.innerHTML = "";
     eligibleShard = null;
     empty.hidden = true;
-    showBanner("error", `Could not load your eligibility. ${describeError(err)} Retry with Refresh.`);
+    showBanner("error", `Could not load eligibility. ${describeError(err)} Retry with Refresh.`);
     return;
   }
 
@@ -346,7 +416,7 @@ async function loadEligible() {
     list.innerHTML = "";
     eligibleShard = null;
     empty.hidden = false;
-    empty.textContent = "Your wallet was not a Normies holder at the snapshot block.";
+    empty.textContent = notHolderMsg;
     return;
   }
 
@@ -372,12 +442,15 @@ async function loadEligible() {
 
   if (unclaimed === 0) {
     empty.hidden = false;
-    empty.textContent = "You have claimed all eligible Normies.";
+    empty.textContent = isVault
+      ? "All eligible Normies for that address are already claimed."
+      : "You have claimed all eligible Normies.";
     btn.hidden = true;
   } else {
     empty.hidden = true;
     btn.hidden = false;
-    btn.textContent = `Claim ${unclaimed} ${unclaimed === 1 ? "Normie" : "Normies"}`;
+    const noun = unclaimed === 1 ? "Normie" : "Normies";
+    btn.textContent = isVault ? `Claim ${unclaimed} ${noun} for ${short(target)}` : `Claim ${unclaimed} ${noun}`;
     // Gating: enabled only on the expected chain and when no claim is in flight.
     const wrongChain = walletChainId != null && walletChainId !== expectedChainId;
     btn.disabled = wrongChain || claimInFlight;
@@ -397,6 +470,10 @@ async function onClaimAll() {
   }
   if (walletChainId != null && walletChainId !== expectedChainId) {
     showBanner("warn", `Switch your wallet to ${CHAIN_NAMES[expectedChainId] || expectedChainId} (chainId ${expectedChainId}) to claim.`);
+    return;
+  }
+  if (vaultInvalid) {
+    showBanner("warn", "Enter a valid vault address, or clear the field to claim for yourself.");
     return;
   }
   if (!eligibleShard || eligibleShard.length === 0) return;
@@ -423,6 +500,8 @@ async function onClaimAll() {
     const normieIds = unclaimed.map((s) => BigInt(s.normieId));
     const customizedFlags = unclaimed.map((s) => Boolean(s.customizedAtSnapshot));
     const proofs = unclaimed.map((s) => s.proof);
+    // vault: a real zero-address param for direct claims, the vault for delegated claims.
+    const vaultArg = claimVault ?? zeroAddress;
 
     // 4. One tx for the whole batch (whales included; ~8k gas per Normie).
     btn.textContent = "Confirm in wallet…";
@@ -430,7 +509,7 @@ async function onClaimAll() {
       address: contractAddress,
       abi,
       functionName: "claim",
-      args: [normieIds, customizedFlags, proofs],
+      args: [normieIds, customizedFlags, proofs, vaultArg],
       account
     });
     btn.textContent = "Waiting for confirmation…";
@@ -438,12 +517,23 @@ async function onClaimAll() {
 
     // 5. Success: refresh phase state, receipts, and per-Normie claimed status.
     claimInFlight = false; // let the post-claim refresh render an accurate button
-    showBanner("ok", `Claimed ${unclaimed.length} ${unclaimed.length === 1 ? "Normie" : "Normies"}.`);
+    const noun = unclaimed.length === 1 ? "Normie" : "Normies";
+    showBanner(
+      "ok",
+      claimVault ? `Claimed ${unclaimed.length} ${noun} for ${short(claimVault)}.` : `Claimed ${unclaimed.length} ${noun}.`
+    );
     await refreshPhaseAndSupply();
     await Promise.allSettled([loadEligible(), loadReceipts()]);
   } catch (err) {
     // 6. Failure: surface the reason and re-enable the button.
-    showBanner("error", `Claim failed. ${describeError(err)}`);
+    if (claimVault && isInvalidDelegation(err)) {
+      showBanner(
+        "error",
+        `Your wallet is not delegated by ${short(claimVault)} on delegate.xyz. Set up the delegation at https://delegate.xyz before claiming.`
+      );
+    } else {
+      showBanner("error", `Claim failed. ${describeError(err)}`);
+    }
     btn.textContent = originalLabel;
     btn.disabled = false;
   } finally {

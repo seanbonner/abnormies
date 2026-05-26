@@ -293,6 +293,27 @@ header { margin-bottom: 28px; }
 
 #claim-btn { margin-bottom: 16px; }
 
+/* Delegated (vault) claim */
+.delegate-disclosure { margin-bottom: 16px; }
+.delegate-note { font-size: 13px; color: var(--muted); margin-bottom: 8px; }
+.vault-input {
+  width: 100%;
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-size: 13px;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+}
+.vault-input:focus { outline: none; border-color: var(--text); }
+.vault-error {
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-size: 12px;
+  color: var(--error);
+  margin-top: 6px;
+}
+.vault-error[hidden] { display: none; }
+
 .badge {
   font-family: ui-monospace, "SF Mono", Consolas, monospace;
   font-size: 10px;
