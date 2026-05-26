@@ -58,13 +58,14 @@
   <section id="mint-section" class="panel" hidden>
     <h2>Mint</h2>
     <p class="section-note">Phase 2 public mint. Receipts resolve to Abnormie IDs after reveal.</p>
-    <div class="mint-controls">
+    <div id="mint-form" class="mint-controls">
       <label>Count
-        <input id="mint-count" type="number" min="1" max="10" value="1" step="1">
+        <input id="mint-count" type="number" min="1" max="50" value="1" step="1">
       </label>
       <div class="mint-total">Total <span id="mint-total">—</span></div>
       <button id="mint-btn" class="btn btn-primary">Mint</button>
     </div>
+    <div id="mint-empty" class="empty" hidden></div>
   </section>
 
   <!-- My Abnormies (connected only) -->

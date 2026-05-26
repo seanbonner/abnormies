@@ -39,6 +39,8 @@ let listenersAttached = false;
 let currentPhase = null;
 let mintPrice = 0n;
 let maxPerCall = 50n;
+let phase2Remaining = 0n; // phase2RemainingSlots, refreshed while Phase 2 is open
+let mintInFlight = false;
 let eligibleShard = null; // proof shard for the current claim target (or null)
 let claimInFlight = false;
 let claimVault = null; // checksummed vault address when delegate-claiming, else null
@@ -84,7 +86,7 @@ async function init() {
   $("expected-chain").textContent = `${CHAIN_NAMES[expectedChainId] || `chain ${expectedChainId}`} (${expectedChainId})`;
   $("connect-btn").addEventListener("click", connect);
   $("refresh-btn").addEventListener("click", refreshAll);
-  $("mint-count").addEventListener("input", updateMintTotal);
+  $("mint-count").addEventListener("input", syncMintForm);
   $("mint-btn").addEventListener("click", onMintClick);
   $("claim-btn").addEventListener("click", onClaimAll);
   $("vault-input").addEventListener("input", onVaultInput);
@@ -254,43 +256,145 @@ async function refreshPhaseAndSupply() {
 // ---------------------------------------------------------------------------
 // Mint (Phase 2)
 // ---------------------------------------------------------------------------
+// Called while Phase 2 is open: read mint params + remaining supply, then render.
 async function prepareMint() {
   try {
-    const [price, cap] = await Promise.all([reader.read.MINT_PRICE(), reader.read.PHASE2_MAX_PER_CALL()]);
+    const [price, cap, remaining] = await Promise.all([
+      reader.read.MINT_PRICE(),
+      reader.read.PHASE2_MAX_PER_CALL(),
+      reader.read.phase2RemainingSlots()
+    ]);
     mintPrice = price;
     maxPerCall = cap;
-    $("mint-count").max = Number(cap);
+    phase2Remaining = remaining;
   } catch {
-    /* keep defaults */
+    /* keep last-known values */
   }
-  updateMintTotal();
+  renderMint();
 }
 
-function clampedCount() {
-  const raw = Number($("mint-count").value || 1);
-  return Math.max(1, Math.min(raw, Number(maxPerCall)));
+// Upper bound on a single mint: min(PHASE2_MAX_PER_CALL, phase2RemainingSlots).
+function mintMax() {
+  return Math.min(Number(maxPerCall), Number(phase2Remaining));
 }
 
-function updateMintTotal() {
-  const total = mintPrice * BigInt(clampedCount());
-  $("mint-total").textContent = `${formatEther(total)} ETH`;
+// Choose form vs. empty-state (not connected / sold out) for the mint section.
+function renderMint() {
+  const form = $("mint-form");
+  const empty = $("mint-empty");
+
+  if (!account) {
+    form.hidden = true;
+    empty.hidden = false;
+    empty.textContent = "Connect a wallet to mint.";
+    return;
+  }
+  if (mintMax() < 1) {
+    form.hidden = true;
+    empty.hidden = false;
+    empty.textContent = "Phase 2 sold out. Awaiting reveal.";
+    return;
+  }
+  empty.hidden = true;
+  form.hidden = false;
+  syncMintForm();
 }
 
-function onMintClick() {
-  const count = clampedCount();
-  const value = mintPrice * BigInt(count);
-  // STUB: write path not wired yet.
-  // TODO(write): await walletClient.writeContract({
-  //   address: contractAddress, abi, functionName: "mintPhase2",
-  //   args: [BigInt(count)], value,
-  // });  // value must equal count * MINT_PRICE (no refunds)
-  console.log("[STUB] mintPhase2 payload:", {
-    functionName: "mintPhase2",
-    count,
-    value: value.toString(),
-    valueEth: formatEther(value)
-  });
-  showBanner("ok", `Mint stubbed for ${count} (${formatEther(value)} ETH). Params logged to console; write path not wired yet.`);
+// Clamp the count input to [1, mintMax()], then update total, label, and gating.
+function syncMintForm() {
+  const max = Math.max(1, mintMax());
+  $("mint-count").max = String(max);
+
+  let n = Math.floor(Number($("mint-count").value));
+  if (!Number.isFinite(n) || n < 1) n = 1;
+  if (n > max) n = max;
+  $("mint-count").value = String(n);
+
+  $("mint-total").textContent = `${formatEther(mintPrice * BigInt(n))} ETH`;
+  $("mint-btn").textContent = `Mint ${n} ${n === 1 ? "Abnormie" : "Abnormies"}`;
+
+  const wrongChain = walletChainId != null && walletChainId !== expectedChainId;
+  $("mint-btn").disabled = !account || wrongChain || mintMax() < 1 || mintInFlight;
+}
+
+async function onMintClick() {
+  const btn = $("mint-btn");
+  if (!walletClient || !account) {
+    showBanner("error", "Connect a wallet first.");
+    return;
+  }
+  if (currentPhase !== 1) {
+    showBanner("warn", "Minting is only open in Phase 2.");
+    return;
+  }
+  if (walletChainId != null && walletChainId !== expectedChainId) {
+    showBanner("warn", `Switch your wallet to ${CHAIN_NAMES[expectedChainId] || expectedChainId} (chainId ${expectedChainId}) to mint.`);
+    return;
+  }
+
+  // 1. Validate count against the last-known bound.
+  const maxNow = mintMax();
+  let count = Math.floor(Number($("mint-count").value));
+  if (!Number.isInteger(count) || count < 1 || count > Math.max(1, maxNow)) {
+    showBanner("error", "Enter a whole number of Abnormies within the available range.");
+    return;
+  }
+  if (maxNow < 1) {
+    showBanner("warn", "Phase 2 sold out. Awaiting reveal.");
+    return;
+  }
+
+  const originalLabel = btn.textContent;
+  mintInFlight = true;
+  btn.disabled = true;
+  $("refresh-btn").disabled = true;
+  btn.textContent = "Checking…";
+
+  try {
+    // 2. Re-read remaining; silently reduce count if a race shrank it.
+    let remaining;
+    try {
+      remaining = Number(await reader.read.phase2RemainingSlots());
+    } catch {
+      remaining = maxNow;
+    }
+    if (remaining < 1) {
+      showBanner("warn", "Phase 2 sold out. Awaiting reveal.");
+      await refreshPhaseAndSupply();
+      return;
+    }
+    if (count > remaining) count = remaining;
+
+    // 3. value must equal count * MINT_PRICE (no refunds).
+    const value = mintPrice * BigInt(count);
+
+    // 4. Send.
+    btn.textContent = "Confirm in wallet…";
+    const hash = await walletClient.writeContract({
+      address: contractAddress,
+      abi,
+      functionName: "mintPhase2",
+      args: [BigInt(count)],
+      value,
+      account
+    });
+    btn.textContent = "Waiting for confirmation…";
+    await publicClient.waitForTransactionReceipt({ hash });
+
+    // 5. Success: report the actual count minted, then refresh state + receipts.
+    mintInFlight = false; // let the post-mint refresh render an accurate button
+    showBanner("ok", `Minted ${count} ${count === 1 ? "Abnormie" : "Abnormies"} for ${formatEther(value)} ETH.`);
+    await refreshPhaseAndSupply();
+    if (account) await loadReceipts();
+  } catch (err) {
+    // 6. Failure: surface the reason and re-enable the button.
+    showBanner("error", `Mint failed. ${describeError(err)}`);
+    btn.textContent = originalLabel;
+    btn.disabled = false;
+  } finally {
+    mintInFlight = false;
+    $("refresh-btn").disabled = false;
+  }
 }
 
 // ---------------------------------------------------------------------------
