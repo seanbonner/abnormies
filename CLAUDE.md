@@ -113,10 +113,8 @@ Cloudflare Pages auto-deploys on push to `main`. No further action needed.
 
 License: CC0.
 
-## Sean's interaction preferences
+## Spec authority
 
-- Direct, concise responses. No preamble, no summaries of what you just did.
-- Single action per message unless impossible.
-- Skip confirmation for reversible actions.
-- Don't assume user error.
-- Treat the spec as authoritative for any factual question about the project. Conflicts between this brief and the spec resolve toward the spec.
+Treat the spec as authoritative for any factual question about the project. Conflicts between this brief and the spec resolve toward the spec.
+
+General working preferences live in the shared `01-PROJECTS/CLAUDE.md`.
