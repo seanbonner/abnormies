@@ -44,10 +44,11 @@ const config = {
 await rm(dist, { recursive: true, force: true });
 await mkdir(resolve(dist, "abi"), { recursive: true });
 
-// Copy static assets but skip main.js — esbuild emits the bundled version below.
+// Copy static assets but skip the JS entry points — esbuild emits the bundled
+// versions below.
 await cp(publicDir, dist, {
   recursive: true,
-  filter: (src) => !src.endsWith("/main.js")
+  filter: (src) => !src.endsWith("/main.js") && !src.endsWith("/abnormie.js")
 });
 
 // Slim the vendored Foundry artifact to just its ABI for the runtime fetch.
@@ -60,16 +61,18 @@ await writeFile(resolve(dist, "abi/Abnormies.json"), `${JSON.stringify({ abi: ar
 // Runtime config, read by main.js via window.ABNORMIES_CONFIG.
 await writeFile(resolve(dist, "config.js"), `window.ABNORMIES_CONFIG = ${JSON.stringify(config, null, 2)};\n`);
 
-// Bundle the entry: viem inlined, single self-contained module, no CDN at runtime.
+// Bundle the entries: viem inlined, self-contained modules, no CDN at runtime.
+//   main.js     -> Phase 1/2 claim + mint app (index.html)
+//   abnormie.js -> post-reveal detail page (abnormie.html)
 await esbuild.build({
-  entryPoints: [resolve(publicDir, "main.js")],
+  entryPoints: [resolve(publicDir, "main.js"), resolve(publicDir, "abnormie.js")],
   bundle: true,
   format: "esm",
   target: "es2022",
   minify: true,
   sourcemap: false,
   legalComments: "none",
-  outfile: resolve(dist, "main.js")
+  outdir: dist
 });
 
 if (!config.contractAddress) {

@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Abnormie — Detail</title>
+<meta name="description" content="A single revealed Abnormie and its seed Normie.">
+<link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+
+<div class="wrap detail-wrap">
+
+  <!-- Top nav strip -->
+  <nav class="detail-nav">
+    <a id="back-link" class="detail-nav-back" href="./portfolio.html">← Portfolio</a>
+    <span id="wallet-address" class="detail-nav-wallet" role="button" tabindex="0">Not connected</span>
+    <span class="detail-nav-site">ABNORMIES</span>
+  </nav>
+
+  <!-- Status banner -->
+  <div id="banner" class="banner" hidden></div>
+
+  <!-- Error state (token missing / not revealed / config) -->
+  <div id="error-state" class="detail-error" hidden></div>
+
+  <!-- Main content, revealed once the Abnormie loads -->
+  <main id="content" hidden>
+
+    <h1 id="title" class="detail-title display">ABNORMIE #—</h1>
+    <p id="subtitle" class="detail-subtitle mono">Paired with Normie #—</p>
+
+    <div class="detail-hero">
+      <img id="hero-img" class="detail-hero-img" width="360" height="360" alt="">
+    </div>
+
+    <div id="chips" class="detail-chips"></div>
+
+    <div class="detail-cols">
+      <section class="panel detail-panel">
+        <h2>Seed Normie</h2>
+        <div class="detail-seed">
+          <img id="seed-img" class="detail-seed-img" width="80" height="80" alt="" hidden>
+          <dl id="seed-info" class="detail-seed-info mono"></dl>
+        </div>
+      </section>
+
+      <section class="panel detail-panel">
+        <h2>Actions</h2>
+        <div id="actions" class="detail-actions"></div>
+      </section>
+    </div>
+
+    <section class="panel detail-panel">
+      <h2>Traits</h2>
+      <div id="traits" class="detail-traits"></div>
+    </section>
+
+  </main>
+
+  <div class="foot">
+    <div>Abnormies 2026 · <a href="https://creativecommons.org/publicdomain/zero/1.0/">CC0</a></div>
+  </div>
+
+</div>
+
+<!-- config.js sets window.ABNORMIES_CONFIG and must load before the module. -->
+<script src="./config.js"></script>
+<script type="module" src="./abnormie.js"></script>
+
+</body>
+</html>

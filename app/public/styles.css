@@ -385,3 +385,210 @@ header { margin-bottom: 28px; }
 }
 .foot a { color: var(--text); text-decoration: none; border-bottom: 1px solid var(--border); }
 .foot a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* ===========================================================================
+   Abnormie detail page (abnormie.html). Extends the shared palette and
+   typography above; reuses .panel, .btn, .banner, .empty. The detail page is
+   wider than the claim flow, so .detail-wrap overrides the .wrap max-width.
+   =========================================================================== */
+
+.detail-wrap { max-width: 860px; }
+
+/* Top nav strip */
+.detail-nav {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding-bottom: 16px;
+  margin-bottom: 28px;
+  border-bottom: 1px solid var(--border);
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-size: 12px;
+}
+.detail-nav-back { color: var(--text); text-decoration: none; }
+.detail-nav-back:hover { color: var(--accent); }
+.detail-nav-wallet {
+  margin-left: auto;
+  color: var(--muted);
+  cursor: pointer;
+}
+.detail-nav-wallet.is-connected { color: var(--text); }
+.detail-nav-wallet:hover { color: var(--text); }
+.detail-nav-site {
+  font-family: 'Robotastic', ui-monospace, monospace;
+  letter-spacing: 0.1em;
+  color: var(--text);
+  -webkit-font-smoothing: none;
+  -moz-osx-font-smoothing: unset;
+}
+
+/* Error state */
+.detail-error {
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  color: var(--error);
+  padding: 20px;
+  border: 1px dashed var(--border);
+  background: var(--panel);
+}
+.detail-error[hidden] { display: none; }
+
+/* Title + subtitle */
+.detail-title {
+  font-size: 44px;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  text-align: center;
+  margin-bottom: 8px;
+}
+@media (max-width: 600px) { .detail-title { font-size: 32px; } }
+.detail-subtitle {
+  text-align: center;
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 28px;
+}
+
+/* Hero canvas */
+.detail-hero {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 24px;
+}
+.detail-hero-img {
+  width: 360px;
+  height: 360px;
+  max-width: 100%;
+  image-rendering: pixelated;
+  background: var(--panel);
+  border: 1px solid var(--border);
+}
+
+/* Status chips */
+.detail-chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 36px;
+}
+.chip {
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 4px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--muted);
+  background: var(--bg);
+}
+.chip--inverted {
+  background: var(--text);
+  color: var(--bg);
+  border-color: var(--text);
+}
+
+/* Two-column row (seed + actions) */
+.detail-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+@media (max-width: 640px) { .detail-cols { grid-template-columns: 1fr; } }
+.detail-panel {
+  padding: 20px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+}
+
+/* Seed Normie panel */
+.detail-seed {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+.detail-seed-img {
+  width: 80px;
+  height: 80px;
+  flex: none;
+  image-rendering: pixelated;
+  background: var(--bg);
+  border: 1px solid var(--border);
+}
+.detail-seed-info {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+  font-size: 12px;
+  margin: 0;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.detail-seed-info dt {
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 10px;
+  align-self: center;
+}
+.detail-seed-info dd {
+  margin: 0;
+  color: var(--text);
+  text-align: right;
+  word-break: break-all;
+}
+.detail-seed-os {
+  grid-column: 1 / -1;
+  margin-top: 8px;
+  color: var(--text);
+  text-decoration: none;
+  border-bottom: 1px solid var(--border);
+  justify-self: start;
+}
+.detail-seed-os:hover { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* Actions panel: 2-column button grid */
+.detail-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.detail-actions .btn { width: 100%; text-align: center; }
+
+/* Destructive actions (Thunder, Lightning) */
+.btn-danger {
+  border-color: var(--error);
+  color: var(--error);
+}
+.btn-danger:hover { background: var(--error); color: var(--bg); }
+
+/* Traits panel: full-width label/value rows with dotted separators */
+.detail-traits {
+  display: grid;
+  grid-template-columns: 1fr;
+}
+.trait-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px dotted var(--border);
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-size: 12px;
+}
+.trait-row:last-child { border-bottom: none; }
+.trait-label {
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 11px;
+}
+.trait-value {
+  margin-left: auto;
+  color: var(--text);
+  text-align: right;
+  word-break: break-word;
+}
