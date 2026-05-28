@@ -7,6 +7,8 @@ node_modules/
 .wrangler/
 prototype.html
 
-# Source snapshots are regenerable and throwaway (Sepolia now, mainnet later).
-# Commit the derived proofs/ output instead — that is the runtime + verifiable artifact.
+# Test/source snapshots (Sepolia, regenerable) are throwaway and stay ignored.
+# The public mainnet Phase 1 snapshot is tracked instead: holders need it to
+# reproduce the committed merkle root, and the Cloudflare Pages build reads it at launch.
 app/snapshot/snapshot-*.json
+!app/snapshot/snapshot-25182664.json
