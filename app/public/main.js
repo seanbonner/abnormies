@@ -25,7 +25,7 @@ const CHAINS = { 1: mainnet, 11155111: sepolia };
 const CHAIN_NAMES = { 1: "Ethereum Mainnet", 11155111: "Sepolia" };
 
 const expectedChainId = Number(cfg.chainId || 1);
-const chain = CHAINS[expectedChainId] || sepolia;
+const chain = CHAINS[expectedChainId] || mainnet;
 const contractAddress = cfg.contractAddress;
 
 // delegate.xyz v2 registry (same address on every network it deploys to).
