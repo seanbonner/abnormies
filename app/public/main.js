@@ -77,6 +77,15 @@ let vaultInvalid = false; // true when the vault field holds a malformed address
 let discoveredVaults = []; // vaults that have delegated to the connected wallet for Abnormies
 let delegationsAccount = null; // account the vault dropdown was last populated for
 
+// Phase 3 reveal state.
+const RESOLVE_GAS_PER_RECEIPT = 120473n; // measured per-receipt cost of resolveReceipts (gas investigation)
+let revealInFlight = false;
+let revealNextResolve = 0n; // cursor and total, cached for the success-message range
+let revealReceiptsLen = 0n;
+let revealGasPrice = 0n; // wei, refreshed for the cost estimate
+let revealEthUsd = null; // number, or null if the price feed is unavailable
+let revealCostTimer = null; // 30s refresh interval, only while the reveal UI is shown
+
 // ---------------------------------------------------------------------------
 // DOM helpers
 // ---------------------------------------------------------------------------
@@ -112,6 +121,49 @@ function skyThumb(className) {
   return svg;
 }
 
+// Decode an on-chain tokenURI (data:application/json...) and return its image
+// field (itself a data:image/svg+xml URI). Used to render resolved holdings.
+function parseTokenURIImage(uri) {
+  const comma = uri.indexOf(",");
+  const meta = uri.slice(5, comma);
+  let body = uri.slice(comma + 1);
+  if (/;base64/i.test(meta)) {
+    const bin = atob(body);
+    body = new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0)));
+  } else {
+    try {
+      body = decodeURIComponent(body);
+    } catch {
+      /* raw JSON, no percent-encoding */
+    }
+  }
+  return JSON.parse(body).image;
+}
+
+// One My Abnormies grid cell. Resolved holdings render the real Abnormie image
+// and link to the detail page; unresolved holdings keep the Sky stand-in.
+function makeReceiptCell({ resolved, abnormieId, image }) {
+  const labelText = resolved ? `Abnormie #${abnormieId}` : "[unrevealed]";
+  const cell = document.createElement(resolved ? "a" : "div");
+  cell.className = "receipt-cell";
+  if (resolved) cell.href = `/app/abnormie.html?id=${abnormieId}`;
+  if (resolved && image) {
+    const img = document.createElement("img");
+    img.className = "receipt-thumb";
+    img.src = image;
+    img.alt = labelText;
+    img.loading = "lazy";
+    cell.appendChild(img);
+  } else {
+    cell.appendChild(skyThumb("receipt-thumb"));
+  }
+  const label = document.createElement("span");
+  label.className = "receipt-label";
+  label.textContent = labelText;
+  cell.appendChild(label);
+  return cell;
+}
+
 // Mirrors EtherPool's describeError: surface the most human-readable field.
 function describeError(err) {
   if (!err) return "Unknown error.";
@@ -141,6 +193,8 @@ async function init() {
   $("claim-btn").addEventListener("click", onClaimAll);
   $("vault-input").addEventListener("input", onVaultInput);
   $("vault-select").addEventListener("change", onVaultSelect);
+  $("reveal-count").addEventListener("input", updateRevealSlider);
+  $("reveal-btn").addEventListener("click", onRevealClick);
 
   if (!contractAddress || !isAddress(contractAddress)) {
     showBanner("error", "No contract address configured. Set FRONTEND_CONTRACT_ADDRESS and rebuild.");
@@ -312,9 +366,9 @@ async function refreshPhaseAndSupply() {
   if (claimOpen) label = "Phase 1: claims open";
   else if (phase1ClosedByTime) label = "Phase 1 closed — Phase 2 opens once closePhase1 is called";
   else if (currentPhase === 1 && !sealed) label = "Phase 2: mint open";
-  else if (currentPhase === 1 && sealed) label = "Reveal pending";
-  else if (revealed && nextResolve < receiptsLen) label = "Resolving";
-  else label = "Revealed";
+  else if (currentPhase === 1 && sealed) label = "Reveal pending — entropy gathering";
+  else if (revealed && nextResolve < receiptsLen) label = "Phase 3: reveal in progress";
+  else label = "Reveal complete";
   $("phase-label").textContent = label;
 
   // Page subtitle: terse UX-phase label under the wordmark, derived from the same
@@ -326,7 +380,7 @@ async function refreshPhaseAndSupply() {
   else if (phase1ClosedByTime) subtitle = "Phase 1 · Closed";
   else if (currentPhase === 1 && !sealed) subtitle = "Phase 2 · Mint";
   else if (currentPhase === 1 && sealed) subtitle = "Reveal pending";
-  else if (revealed && nextResolve < receiptsLen) subtitle = "Resolving";
+  else if (revealed && nextResolve < receiptsLen) subtitle = "Phase 3 · Reveal";
   else subtitle = "Revealed";
   $("page-subtitle").textContent = subtitle;
 
@@ -338,7 +392,146 @@ async function refreshPhaseAndSupply() {
   $("claim-section").hidden = !claimOpen;
   $("mint-section").hidden = !(currentPhase === 1 && !sealed);
 
+  // Phase 3: reveal is live once revealed() is true; "in progress" until the
+  // monotonic cursor (nextResolveIndex) reaches receiptsLength, then "complete".
+  const revealInProgress = revealed && nextResolve < receiptsLen;
+  const revealComplete = revealed && nextResolve >= receiptsLen;
+  $("reveal-section").hidden = !(revealInProgress || revealComplete);
+  if (revealInProgress || revealComplete) {
+    revealNextResolve = nextResolve;
+    revealReceiptsLen = receiptsLen;
+    $("reveal-progress").textContent = `${nextResolve.toString()} of ${receiptsLen.toString()} revealed`;
+    $("reveal-controls").hidden = revealComplete;
+    $("reveal-complete").hidden = !revealComplete;
+    if (!revealComplete) updateRevealSlider();
+  }
+  manageRevealCostTimer(revealInProgress);
+
   if (currentPhase === 1 && !sealed) await prepareMint();
+}
+
+// ---------------------------------------------------------------------------
+// Reveal (Phase 3)
+// ---------------------------------------------------------------------------
+// resolveReceipts(N) is permissionless and advances the global cursor by N (the
+// contract clamps to the remaining count). The caller chooses HOW MANY, never
+// WHICH — the next N in queue order are minted to their owners. Cost is estimated
+// from the measured per-receipt gas times the live gas price.
+function updateRevealSlider() {
+  const n = Number($("reveal-count").value);
+  $("reveal-n").textContent = String(n);
+  const wrongChain = walletChainId != null && walletChainId !== expectedChainId;
+  const btn = $("reveal-btn");
+  if (!account) {
+    btn.textContent = "Connect wallet to reveal";
+    btn.disabled = false;
+  } else {
+    btn.textContent = `Reveal ${n}`;
+    btn.disabled = wrongChain || revealInFlight;
+  }
+  renderRevealCost();
+}
+
+function renderRevealCost() {
+  const n = BigInt(Number($("reveal-count").value));
+  const el = $("reveal-cost");
+  if (revealGasPrice === 0n) {
+    el.textContent = "Estimated cost: …";
+    return;
+  }
+  const eth = Number(formatEther(n * RESOLVE_GAS_PER_RECEIPT * revealGasPrice));
+  let text = `Estimated cost: ~${eth.toFixed(4)} ETH`;
+  if (revealEthUsd != null) {
+    text += ` (~$${(eth * revealEthUsd).toLocaleString(undefined, { maximumFractionDigits: 0 })})`;
+  }
+  el.textContent = text;
+}
+
+async function refreshRevealCost() {
+  try {
+    revealGasPrice = await publicClient.getGasPrice();
+  } catch {
+    /* keep last known gas price */
+  }
+  try {
+    const res = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd");
+    if (res.ok) {
+      const j = await res.json();
+      if (typeof j?.ethereum?.usd === "number") revealEthUsd = j.ethereum.usd;
+    }
+  } catch {
+    /* leave USD off on CORS/network failure; ETH estimate still shows */
+  }
+  renderRevealCost();
+}
+
+// Start the 30s gas/price refresh only while the reveal UI is visible.
+function manageRevealCostTimer(active) {
+  if (active && !revealCostTimer) {
+    refreshRevealCost();
+    revealCostTimer = setInterval(refreshRevealCost, 30000);
+  } else if (!active && revealCostTimer) {
+    clearInterval(revealCostTimer);
+    revealCostTimer = null;
+  }
+}
+
+async function onRevealClick() {
+  if (!account) {
+    await connect();
+    return;
+  }
+  if (walletChainId != null && walletChainId !== expectedChainId) {
+    showBanner(
+      "warn",
+      `Switch your wallet to ${CHAIN_NAMES[expectedChainId] || expectedChainId} (chainId ${expectedChainId}) to reveal.`
+    );
+    return;
+  }
+  if (revealInFlight) return;
+
+  const n = Number($("reveal-count").value);
+  const btn = $("reveal-btn");
+  const original = btn.textContent;
+  revealInFlight = true;
+  btn.disabled = true;
+  $("refresh-btn").disabled = true;
+
+  try {
+    // Read the cursor immediately before and after so the success message reports
+    // the exact queue positions this transaction advanced (the contract clamps N
+    // to the remaining count, and another caller may have advanced it meanwhile).
+    const startIdx = await reader.read.nextResolveIndex();
+    btn.textContent = "Confirm in wallet…";
+    const hash = await walletClient.writeContract({
+      address: contractAddress,
+      abi,
+      functionName: "resolveReceipts",
+      args: [BigInt(n)],
+      account
+    });
+    btn.textContent = "Waiting for confirmation…";
+    await publicClient.waitForTransactionReceipt({ hash });
+
+    const endIdx = await reader.read.nextResolveIndex();
+    const did = endIdx - startIdx;
+    revealInFlight = false;
+    if (did === 0n) {
+      showBanner("warn", "Those positions were already revealed by someone else.");
+    } else {
+      showBanner(
+        "ok",
+        `Revealed ${did.toString()} Abnormies (you helped reveal positions ${(startIdx + 1n).toString()} to ${endIdx.toString()} in the queue).`
+      );
+    }
+    await refreshAll();
+  } catch (err) {
+    revealInFlight = false;
+    showBanner("error", `Reveal failed. ${describeError(err)}`);
+    btn.textContent = original;
+    btn.disabled = false;
+    $("refresh-btn").disabled = false;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -908,7 +1101,7 @@ async function loadReceipts() {
   }
 
   const targetLower = target.toLowerCase();
-  let count = 0;
+  const owned = []; // matching receipts in queue order: { resolved, abnormieId }
   const CHUNK = 400;
   for (let start = 0; start < len; start += CHUNK) {
     const end = Math.min(start + CHUNK, len);
@@ -934,11 +1127,12 @@ async function loadReceipts() {
     results.forEach((r) => {
       if (r.status !== "success") return;
       // Receipt tuple: (claimant, normieId, fromPhase1, snapshotCustomized, resolved, abnormieId).
-      if (r.result[0].toLowerCase() === targetLower) count++;
+      if (r.result[0].toLowerCase() !== targetLower) return;
+      owned.push({ resolved: Boolean(r.result[4]), abnormieId: Number(r.result[5]) });
     });
   }
 
-  if (count === 0) {
+  if (owned.length === 0) {
     listEl.innerHTML = "";
     empty.hidden = false;
     empty.textContent = "Nothing to show yet.";
@@ -946,17 +1140,35 @@ async function loadReceipts() {
   }
 
   listEl.innerHTML = "";
-  for (let i = 0; i < count; i++) {
-    const cell = document.createElement("div");
-    cell.className = "receipt-cell";
-    // Post-reveal swap: replace skyThumb(...) with the Abnormie's <img> and the
-    // label text with the token id. Same cell structure, one line each, no layout change.
-    cell.appendChild(skyThumb("receipt-thumb"));
-    const label = document.createElement("span");
-    label.className = "receipt-label";
-    label.textContent = "[unrevealed]";
-    cell.appendChild(label);
-    listEl.appendChild(cell);
+  // Resolved holdings have a real Abnormie image; fetch them in one multicall.
+  // tokenURI only succeeds for minted (resolved) tokens.
+  const resolvedIds = owned.filter((o) => o.resolved).map((o) => o.abnormieId);
+  const images = {};
+  if (resolvedIds.length) {
+    const calls = resolvedIds.map((id) => ({
+      address: contractAddress,
+      abi,
+      functionName: "tokenURI",
+      args: [BigInt(id)]
+    }));
+    let uriResults;
+    try {
+      uriResults = await publicClient.multicall({ contracts: calls });
+    } catch {
+      uriResults = resolvedIds.map(() => ({ status: "failure" }));
+    }
+    uriResults.forEach((r, k) => {
+      if (r.status !== "success") return;
+      try {
+        images[resolvedIds[k]] = parseTokenURIImage(r.result);
+      } catch {
+        /* leave undefined; the cell falls back to the Sky stand-in */
+      }
+    });
+  }
+
+  for (const o of owned) {
+    listEl.appendChild(makeReceiptCell({ resolved: o.resolved, abnormieId: o.abnormieId, image: images[o.abnormieId] }));
   }
 }
 
