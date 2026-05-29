@@ -145,7 +145,6 @@ function isInvalidDelegation(err) {
 // Init
 // ---------------------------------------------------------------------------
 async function init() {
-  $("expected-chain").textContent = `${CHAIN_NAMES[expectedChainId] || `chain ${expectedChainId}`} (${expectedChainId})`;
   $("connect-btn").addEventListener("click", connect);
   $("refresh-btn").addEventListener("click", refreshAll);
   $("mint-count").addEventListener("input", syncMintForm);
@@ -239,18 +238,14 @@ function attachListeners() {
 
 function renderWalletBar() {
   hideBanner();
-  if (account) {
-    $("wallet-address").textContent = short(account);
-    $("wallet-chain").textContent = walletChainId != null ? `chain ${walletChainId}` : "";
-  } else {
-    $("wallet-address").textContent = "Not connected";
-    $("wallet-chain").textContent = "";
-  }
+  $("wallet-address").textContent = account ? short(account) : "Not connected";
+  // Wrong-network warning in plain language. The technical chain readouts (the
+  // "chain N" tag next to the address and the "Expected …" caption) were removed
+  // from mint.html, so this banner is now the only user-facing signal. The
+  // chain-mismatch logic that gates claim/mint and eligibility loading is intact;
+  // this is presentation only.
   if (account && walletChainId != null && walletChainId !== expectedChainId) {
-    showBanner(
-      "warn",
-      `Wrong network. Switch your wallet to ${CHAIN_NAMES[expectedChainId] || expectedChainId} (chainId ${expectedChainId}).`
-    );
+    showBanner("warn", "Wrong network. Switch your wallet to Ethereum to continue.");
   }
 }
 
