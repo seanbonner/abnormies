@@ -53,6 +53,18 @@ const DELEGATE_REGISTRY_ABI = [
         ]
       }
     ]
+  },
+  {
+    type: "function",
+    name: "checkDelegateForContract",
+    stateMutability: "view",
+    inputs: [
+      { name: "to", type: "address" },
+      { name: "from", type: "address" },
+      { name: "contract_", type: "address" },
+      { name: "rights", type: "bytes32" }
+    ],
+    outputs: [{ name: "", type: "bool" }]
   }
 ];
 
@@ -775,7 +787,54 @@ async function loadEligible() {
   }
 }
 
-// Bulk claim: every unclaimed eligible Normie in a single tx. No per-Normie buttons.
+// delegate.xyz pre-check: can `to` claim on behalf of `from` for this contract
+// (rights == 0)? Read-only, via the public client.
+async function isDelegatedForClaim(to, from) {
+  return publicClient.readContract({
+    address: DELEGATE_REGISTRY,
+    abi: DELEGATE_REGISTRY_ABI,
+    functionName: "checkDelegateForContract",
+    args: [to, from, contractAddress, ZERO_BYTES32]
+  });
+}
+
+// Walk a viem error chain for the first decoded custom error (name + args).
+function decodeContractError(err) {
+  let e = err;
+  while (e) {
+    if (e.data?.errorName) return { name: e.data.errorName, args: e.data.args || [] };
+    e = e.cause;
+  }
+  return null;
+}
+
+// Friendly text for a decoded claim revert. Known errors get tailored copy; any
+// other revert (including a failed on-chain delegation check) is surfaced verbatim
+// (decoded name + args) behind a generic prefix.
+function describeClaimRevert(err) {
+  const decoded = decodeContractError(err);
+  if (!decoded) return describeError(err);
+  if (decoded.name === "AlreadyClaimed") {
+    const id = decoded.args?.[0] != null ? decoded.args[0].toString() : "?";
+    return `Normie #${id} was already claimed. Refresh and try again.`;
+  }
+  if (decoded.name === "LengthMismatch") {
+    return "Claim data was inconsistent. Refresh the page and try again.";
+  }
+  const parts = (decoded.args || []).map((a) => (typeof a === "bigint" ? a.toString() : String(a)));
+  return `Reverted: ${decoded.name}${parts.length ? `(${parts.join(", ")})` : ""}.`;
+}
+
+// How many Normies go in a single claim() tx. Bounds calldata (~13 proof hashes
+// per entry) and per-tx gas so the public-RPC simulate/estimate and the wallet
+// signature stay well inside provider limits.
+const CLAIM_BATCH_SIZE = 50;
+
+// Bulk claim, chunked. Every unclaimed eligible Normie is claimed across one or
+// more 50-entry claim() txs. Each batch is pre-flighted through the public client
+// (simulate + gas estimate) BEFORE the wallet is opened, so a doomed claim never
+// reaches signing, and the gas limit is fixed (the wallet's own estimator is out
+// of the path). A re-run resumes: already-claimed ids are filtered out first.
 async function onClaimAll() {
   const btn = $("claim-btn");
   if (!walletClient || !account) {
@@ -802,48 +861,152 @@ async function onClaimAll() {
   $("refresh-btn").disabled = true;
   btn.textContent = "Checking…";
 
+  // Restore the button to a retryable state on any abort. The success path lets
+  // loadEligible() re-render it instead.
+  const abort = (kind, msg) => {
+    showBanner(kind, msg);
+    btn.textContent = originalLabel;
+    btn.disabled = false;
+  };
+
+  // vault: a real zero-address param for direct claims, the vault for delegated claims.
+  const vaultArg = claimVault ?? zeroAddress;
+
   try {
-    // 1. Re-read claimed() immediately before the call; filter to unclaimed.
+    // Delegation pre-check: for a delegated claim, confirm this wallet is actually
+    // delegated by the vault before doing anything else. Gives a precise message and
+    // skips even the simulate round-trip for the common misconfiguration.
+    if (vaultArg !== zeroAddress) {
+      let delegated;
+      try {
+        delegated = await isDelegatedForClaim(account, vaultArg);
+      } catch (e) {
+        // Registry read failed: don't hard-block; the per-batch simulate is the backstop.
+        console.warn("checkDelegateForContract read failed; relying on simulate backstop:", e);
+        delegated = true;
+      }
+      if (!delegated) {
+        abort(
+          "error",
+          `This wallet is not delegated to claim for ${short(vaultArg)}. Claim directly from the holding wallet, or set up delegation at delegate.xyz.`
+        );
+        return;
+      }
+    }
+
+    // Re-read claimed() via the public client and keep only still-unclaimed entries,
+    // so a re-run naturally resumes where a previous run stopped.
     const claimedFlags = await readClaimedFlags(eligibleShard);
     const unclaimed = eligibleShard.filter((_, i) => !claimedFlags[i]);
-
-    // 2. Race: everything was claimed since the last refresh.
     if (unclaimed.length === 0) {
       showBanner("warn", "Already claimed.");
       await loadEligible();
       return;
     }
 
-    // 3. Parallel-indexed arrays. Proof hex strings pass through to viem as-is.
-    const normieIds = unclaimed.map((s) => BigInt(s.normieId));
-    const customizedFlags = unclaimed.map((s) => Boolean(s.customizedAtSnapshot));
-    const proofs = unclaimed.map((s) => s.proof);
-    // vault: a real zero-address param for direct claims, the vault for delegated claims.
-    const vaultArg = claimVault ?? zeroAddress;
+    // Split into fixed-size batches.
+    const batches = [];
+    for (let i = 0; i < unclaimed.length; i += CLAIM_BATCH_SIZE) {
+      batches.push(unclaimed.slice(i, i + CLAIM_BATCH_SIZE));
+    }
+    const total = unclaimed.length;
+    const N = batches.length;
+    let claimedSoFar = 0;
 
-    // 4. One tx for the whole batch (whales included; ~8k gas per Normie).
-    btn.textContent = "Confirm in wallet…";
-    const hash = await walletClient.writeContract({
-      address: contractAddress,
-      abi,
-      functionName: "claim",
-      args: [normieIds, customizedFlags, proofs, vaultArg],
-      account
-    });
-    btn.textContent = "Waiting for confirmation…";
-    await publicClient.waitForTransactionReceipt({ hash });
+    for (let b = 0; b < N; b++) {
+      const batch = batches[b];
+      const ids = batch.map((s) => BigInt(s.normieId));
+      const flags = batch.map((s) => Boolean(s.customizedAtSnapshot));
+      const proofs = batch.map((s) => s.proof);
+      const args = [ids, flags, proofs, vaultArg];
+      const firstId = batch[0].normieId;
+      const lastId = batch[batch.length - 1].normieId;
+      const human = `batch ${b + 1} of ${N} (ids ${firstId}-${lastId})`;
 
-    // 5. Success: refresh phase state, receipts, and per-Normie claimed status.
-    claimInFlight = false; // let the post-claim refresh render an accurate button
-    const noun = unclaimed.length === 1 ? "Abnormie" : "Abnormies";
+      // Pre-flight (a): simulate against the public client. A revert aborts the whole
+      // run before any wallet interaction; later batches are not attempted.
+      btn.textContent = `Checking ${human}…`;
+      try {
+        await publicClient.simulateContract({
+          address: contractAddress,
+          abi,
+          functionName: "claim",
+          args,
+          account
+        });
+      } catch (err) {
+        abort(
+          "error",
+          `Claim stopped at ${human}. ${describeClaimRevert(err)}` +
+            (claimedSoFar ? ` (${claimedSoFar} of ${total} already claimed in this run; re-run to resume.)` : "")
+        );
+        return;
+      }
+
+      // Pre-flight (b): gas estimate against the public client; pass an explicit limit
+      // with a 20% buffer so the wallet only signs (its estimator is out of the path).
+      let gas;
+      try {
+        const est = await publicClient.estimateContractGas({
+          address: contractAddress,
+          abi,
+          functionName: "claim",
+          args,
+          account
+        });
+        gas = (est * 120n) / 100n;
+      } catch (err) {
+        abort("error", `Could not estimate gas for ${human}. ${describeClaimRevert(err)}`);
+        return;
+      }
+
+      // Submit this batch. Per-batch wallet confirmation; gas is fixed from above.
+      btn.textContent = `Confirm ${human} in wallet…`;
+      let hash;
+      try {
+        hash = await walletClient.writeContract({
+          address: contractAddress,
+          abi,
+          functionName: "claim",
+          args,
+          account,
+          gas
+        });
+      } catch (err) {
+        // Wallet rejection / error mid-run: completed batches stay claimed; a re-run resumes.
+        if (claimedSoFar > 0) {
+          abort(
+            "warn",
+            `Stopped after ${claimedSoFar} of ${total} claimed. ${describeError(err)} Re-run to claim the rest.`
+          );
+        } else if (claimVault && isInvalidDelegation(err)) {
+          abort(
+            "error",
+            `Your wallet is not delegated by ${short(claimVault)} on delegate.xyz. Set up the delegation at https://delegate.xyz before claiming.`
+          );
+        } else {
+          abort("error", `Claim failed. ${describeError(err)}`);
+        }
+        return;
+      }
+
+      btn.textContent = `Confirming ${human}…`;
+      await publicClient.waitForTransactionReceipt({ hash });
+      claimedSoFar += batch.length;
+    }
+
+    // Success: refresh phase state, receipts, and per-Normie claimed status. Setting
+    // claimInFlight false first lets loadEligible() render an accurate button.
+    claimInFlight = false;
+    const noun = claimedSoFar === 1 ? "Abnormie" : "Abnormies";
     showBanner(
       "ok",
-      claimVault ? `Claimed ${unclaimed.length} ${noun} for ${short(claimVault)}.` : `Claimed ${unclaimed.length} ${noun}.`
+      claimVault ? `Claimed ${claimedSoFar} ${noun} for ${short(claimVault)}.` : `Claimed ${claimedSoFar} ${noun}.`
     );
     await refreshPhaseAndSupply();
     await Promise.allSettled([loadEligible(), loadReceipts()]);
   } catch (err) {
-    // 6. Failure: surface the reason and re-enable the button.
+    // Unexpected failure outside the per-batch handling.
     if (claimVault && isInvalidDelegation(err)) {
       showBanner(
         "error",
