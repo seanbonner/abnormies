@@ -92,6 +92,16 @@ function bootstrap() {
   const chain = CHAINS[expectedChainId] || sepolia;
   const contractAddress = cfg.contractAddress;
 
+  // Sky-colored (#e3e5e4, the renderer's lightest cloud value) stand-in shown at
+  // hero size when an Abnormie has not been revealed yet. Single-rect SVG with an
+  // explicit xmlns so it renders as an <img> src. The 360px frame, pixelated
+  // rendering, and border all come from the existing .detail-hero-img styling.
+  const SKY_PLACEHOLDER =
+    "data:image/svg+xml," +
+    encodeURIComponent(
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" preserveAspectRatio="none"><rect width="40" height="40" fill="#e3e5e4"/></svg>'
+    );
+
   let abi = null;
   let normiesAbi = null;
   let publicClient = null;
@@ -128,6 +138,13 @@ function bootstrap() {
   }
   const describeError = (err) =>
     !err ? "Unknown error." : err.shortMessage || err.details || err.message || String(err);
+
+  // Distinguish a real network/RPC failure from a token that simply is not revealed
+  // yet (tokenURI revert). Only the former should surface as an error state.
+  function isTransportError(err) {
+    const s = `${err?.name || ""} ${err?.details || ""} ${err?.message || ""}`;
+    return /HttpRequestError|TimeoutError|RpcRequestError|Failed to fetch|fetch failed|networkerror/i.test(s);
+  }
 
   // -- wallet --------------------------------------------------------------
   function renderWallet() {
@@ -200,9 +217,14 @@ function bootstrap() {
       const uri = await reader.read.tokenURI([id]);
       metadata = parseTokenURI(uri);
     } catch (err) {
-      showError(
-        `Abnormie #${id} does not exist or has not been revealed yet.\n\n${describeError(err)}`
-      );
+      // tokenURI reverts for any id with no live token yet (pre-reveal / unresolved).
+      // Show the Sky stand-in rather than an error; only a transport failure is a
+      // genuine error worth surfacing.
+      if (isTransportError(err)) {
+        showError(`Could not load Abnormie #${id}.\n\n${describeError(err)}`);
+      } else {
+        renderUnrevealed(id);
+      }
       return;
     }
 
@@ -405,6 +427,42 @@ function bootstrap() {
       return row;
     });
     $("traits").replaceChildren(...nodes);
+  }
+
+  // Pre-reveal stand-in. tokenURI reverts because no token is minted yet (IDs and
+  // seed pairings are assigned at reveal), so there is no real canvas, owner, or
+  // traits to show. Render the Sky hero plus honest "assigned at reveal" copy in
+  // place of the values, keeping the page chrome rather than dropping to an error.
+  function renderUnrevealed(id) {
+    hideBanner();
+    $("title").textContent = `ABNORMIE #${id}`;
+    $("subtitle").textContent = "Unrevealed — token ID and seed Normie are assigned at reveal.";
+
+    const hero = $("hero-img");
+    hero.src = SKY_PLACEHOLDER;
+    hero.alt = `Unrevealed Abnormie #${id}`;
+
+    const chip = document.createElement("span");
+    chip.className = "chip";
+    chip.textContent = "Unrevealed";
+    $("chips").replaceChildren(chip);
+
+    $("seed-img").hidden = true;
+    const dt = document.createElement("dt");
+    dt.textContent = "Status";
+    const dd = document.createElement("dd");
+    dd.textContent = "Seed Normie assigned at reveal";
+    $("seed-info").replaceChildren(dt, dd);
+
+    $("actions").replaceChildren();
+
+    const note = document.createElement("div");
+    note.className = "empty";
+    note.textContent = "Traits appear after reveal.";
+    $("traits").replaceChildren(note);
+
+    $("error-state").hidden = true;
+    $("content").hidden = false;
   }
 
   // -- actions -------------------------------------------------------------
