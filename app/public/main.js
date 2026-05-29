@@ -65,6 +65,7 @@ let walletChainId = null;
 let listenersAttached = false;
 
 let currentPhase = null;
+let claimOpen = false; // phase()===0 AND still inside the deployedAt + PHASE_1_DURATION window
 let mintPrice = 0n;
 let maxPerCall = 50n;
 let phase2Remaining = 0n; // phase2RemainingSlots, refreshed while Phase 2 is open
@@ -235,7 +236,7 @@ async function refreshAll() {
   }
 
   if (account) {
-    if (currentPhase === 0) await loadDelegations();
+    if (claimOpen) await loadDelegations();
     await Promise.allSettled([loadEligible(), loadReceipts()]);
   } else {
     resetVaultPicker();
@@ -244,7 +245,7 @@ async function refreshAll() {
     $("claim-btn").hidden = true;
     eligibleShard = null;
     const empty = $("claim-empty");
-    if (currentPhase === 0) {
+    if (claimOpen) {
       empty.hidden = false;
       empty.textContent = "Connect a wallet to see your eligible Normies.";
     } else {
@@ -253,23 +254,42 @@ async function refreshAll() {
   }
 }
 
-// Phase: derived from phase() + isSealed() + revealed().
-//   0                         -> "Phase 1: claims open"
-//   1 && !sealed              -> "Phase 2: mint open"
-//   1 && sealed (unrevealed)  -> "Reveal pending"
-//   2 (revealed)              -> "Revealed"
+// Phase: derived from phase() + the Phase 1 time window + isSealed() + revealed().
+//   phase 0, within window      -> "Phase 1: claims open"          (claim active)
+//   phase 0, window elapsed     -> "Phase 1 closed — awaiting ..." (neither active)
+//   phase 1 && !sealed          -> "Phase 2: mint open"            (mint active)
+//   phase 1 && sealed           -> "Reveal pending"
+//   phase 2 (revealed)          -> "Revealed"
+//
+// Critical: claim() reverts Phase1Ended once block.timestamp reaches
+// deployedAt + PHASE_1_DURATION, even while phase() is still 0 — closePhase1() is
+// permissionless and may not have been called yet (exactly the live Sepolia state).
+// So the claim UI must gate on the time window too, not on phase() alone, or it
+// will keep offering claims that revert.
 async function refreshPhaseAndSupply() {
-  const [phase, sealed, revealed, receiptsLen, maxSupply] = await Promise.all([
+  const [phase, sealed, revealed, receiptsLen, maxSupply, deployedAt, phase1Duration, block] = await Promise.all([
     reader.read.phase(),
     reader.read.isSealed(),
     reader.read.revealed(),
     reader.read.receiptsLength(),
-    reader.read.MAX_SUPPLY()
+    reader.read.MAX_SUPPLY(),
+    reader.read.deployedAt(),
+    reader.read.PHASE_1_DURATION(),
+    publicClient.getBlock()
   ]);
 
   currentPhase = Number(phase);
+
+  // Compare against chain time (block.timestamp), the same clock the contract's
+  // Phase1Ended guard uses, rather than the viewer's wall clock.
+  const phase1Deadline = deployedAt + phase1Duration;
+  const phase1WindowOpen = block.timestamp < phase1Deadline;
+  claimOpen = currentPhase === 0 && phase1WindowOpen;
+  const phase1ClosedByTime = currentPhase === 0 && !phase1WindowOpen;
+
   let label;
-  if (currentPhase === 0) label = "Phase 1: claims open";
+  if (claimOpen) label = "Phase 1: claims open";
+  else if (phase1ClosedByTime) label = "Phase 1 closed — Phase 2 opens once closePhase1 is called";
   else if (currentPhase === 1 && !sealed) label = "Phase 2: mint open";
   else if (currentPhase === 1 && sealed) label = "Reveal pending";
   else label = "Revealed";
@@ -280,7 +300,7 @@ async function refreshPhaseAndSupply() {
   const remaining = maxSupply - receiptsLen;
   $("progress-counter").textContent = `${remaining.toString()} of ${maxSupply.toString()} remaining`;
 
-  $("claim-section").hidden = currentPhase !== 0;
+  $("claim-section").hidden = !claimOpen;
   $("mint-section").hidden = !(currentPhase === 1 && !sealed);
 
   if (currentPhase === 1 && !sealed) await prepareMint();
@@ -625,7 +645,7 @@ async function loadEligible() {
   const btn = $("claim-btn");
   btn.hidden = true;
 
-  if (currentPhase !== 0) {
+  if (!claimOpen) {
     list.innerHTML = "";
     empty.hidden = true;
     eligibleShard = null;
@@ -712,7 +732,7 @@ async function loadEligible() {
   } else {
     empty.hidden = true;
     btn.hidden = false;
-    const noun = unclaimed === 1 ? "Normie" : "Normies";
+    const noun = unclaimed === 1 ? "Abnormie" : "Abnormies";
     btn.textContent = isVault ? `Claim ${unclaimed} ${noun} for ${short(target)}` : `Claim ${unclaimed} ${noun}`;
     // Gating: enabled only on the expected chain and when no claim is in flight.
     const wrongChain = walletChainId != null && walletChainId !== expectedChainId;
@@ -727,8 +747,8 @@ async function onClaimAll() {
     showBanner("error", "Connect a wallet first.");
     return;
   }
-  if (currentPhase !== 0) {
-    showBanner("warn", "Claiming is only open in Phase 1.");
+  if (!claimOpen) {
+    showBanner("warn", "Claiming is only open during the Phase 1 window.");
     return;
   }
   if (walletChainId != null && walletChainId !== expectedChainId) {
@@ -780,7 +800,7 @@ async function onClaimAll() {
 
     // 5. Success: refresh phase state, receipts, and per-Normie claimed status.
     claimInFlight = false; // let the post-claim refresh render an accurate button
-    const noun = unclaimed.length === 1 ? "Normie" : "Normies";
+    const noun = unclaimed.length === 1 ? "Abnormie" : "Abnormies";
     showBanner(
       "ok",
       claimVault ? `Claimed ${unclaimed.length} ${noun} for ${short(claimVault)}.` : `Claimed ${unclaimed.length} ${noun}.`
