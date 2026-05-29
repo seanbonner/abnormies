@@ -1,5 +1,8 @@
 node_modules/
 dist/
+# Test snapshots are throwaway and ignored; the public mainnet snapshot is tracked
+# so holders can reproduce the merkle root. See root .gitignore for the full policy.
 snapshot/*.json
+!snapshot/snapshot-25182664.json
 .env
 public/config.js

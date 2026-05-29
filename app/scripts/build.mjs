@@ -8,7 +8,10 @@
 //   set -a; source .env; set +a
 //   npm run build
 //
-// Output lands in app/dist/ and is what Cloudflare Pages serves.
+// Output lands in app/dist/ and is what Cloudflare Pages serves. The dist/ contents
+// are published under the /app/ path, so the app's primary page resolves at
+// abnormies.art/app/mint.html. The entry HTML is mint.html (not index.html) so the
+// repo-root teaser keeps abnormies.art/; the detail page is /app/abnormie.html.
 
 import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
@@ -62,7 +65,7 @@ await writeFile(resolve(dist, "abi/Abnormies.json"), `${JSON.stringify({ abi: ar
 await writeFile(resolve(dist, "config.js"), `window.ABNORMIES_CONFIG = ${JSON.stringify(config, null, 2)};\n`);
 
 // Bundle the entries: viem inlined, self-contained modules, no CDN at runtime.
-//   main.js     -> Phase 1/2 claim + mint app (index.html)
+//   main.js     -> Phase 1/2 claim + mint app (mint.html)
 //   abnormie.js -> post-reveal detail page (abnormie.html)
 await esbuild.build({
   entryPoints: [resolve(publicDir, "main.js"), resolve(publicDir, "abnormie.js")],

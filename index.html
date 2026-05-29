@@ -78,6 +78,28 @@ body {
   -moz-osx-font-smoothing: unset;
 }
 
+/* Phase-aware CTA, occupies the old tagline slot. Same display type as the
+   tagline; reads as a link via color + underline, set dynamically by the script. */
+.cta {
+  display: inline-block;
+  font-family: 'Robotastic', ui-monospace, monospace;
+  font-size: 14px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text);
+  text-decoration: none;
+  margin-bottom: 56px;
+  border-bottom: 1px solid var(--border);
+  -webkit-font-smoothing: none;
+  -moz-osx-font-smoothing: unset;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.cta:hover {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
 .body p {
   margin-bottom: 1.4em;
   hyphens: auto;
@@ -261,7 +283,7 @@ body {
 <div class="wrap">
 
   <div class="wordmark">ABNORMIES</div>
-  <div class="tagline">Forthcoming</div>
+  <a id="cta" href="/app/mint.html" class="cta">Claim open now →</a>
 
   <div class="body">
 
@@ -475,6 +497,75 @@ function randomize() {
 document.getElementById('randomize-btn').addEventListener('click', randomize);
 randomize();
 
+</script>
+
+<script>
+// Phase-aware CTA. Plain fetch + a single batched JSON-RPC eth_call, no bundler,
+// no deps. On any failure the static "Claim open now →" default is left untouched.
+(() => {
+  const CFG = {
+    // TODO(mainnet): set to the deployed mainnet Abnormies address post-deploy.
+    contractAddress: "0xc89571638C609a29cb5c00ad3997493d5fe8be67", // Sepolia placeholder
+    chainId: 11155111
+  };
+  const RPC = {
+    1: "https://ethereum-rpc.publicnode.com",
+    11155111: "https://ethereum-sepolia-rpc.publicnode.com"
+  };
+  // [name, 4-byte selector] for each no-arg view function.
+  const FNS = [
+    ["phase", "0xb1c9fe6e"],
+    ["deployedAt", "0xeae4c19f"],
+    ["duration", "0x6839c1bd"],
+    ["isSealed", "0x631f9852"],
+    ["revealed", "0x51830227"],
+    ["nextResolve", "0x33f89332"],
+    ["receipts", "0x6df9a0ac"]
+  ];
+
+  async function run() {
+    const url = RPC[CFG.chainId];
+    if (!url || !/^0x[0-9a-fA-F]{40}$/.test(CFG.contractAddress)) return;
+    const batch = FNS.map(([, data], i) => ({
+      jsonrpc: "2.0", id: i, method: "eth_call",
+      params: [{ to: CFG.contractAddress, data }, "latest"]
+    }));
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(batch)
+    });
+    if (!res.ok) return;
+    const rows = await res.json();
+    const v = {};
+    for (const r of rows) {
+      if (!r || r.error || typeof r.result !== "string") return;
+      v[FNS[r.id][0]] = BigInt(r.result);
+    }
+
+    const phase = Number(v.phase);
+    const now = BigInt(Math.floor(Date.now() / 1000));
+    const windowOpen = now < v.deployedAt + v.duration;
+    const sealed = v.isSealed !== 0n;
+    const revealed = v.revealed !== 0n;
+
+    let text = "Claim open now →";
+    let href = "/app/mint.html";
+    if (phase === 0 && windowOpen) text = "Claim open now →";
+    else if (phase === 0) text = "Phase 1 closed →";
+    else if (phase === 1 && !sealed) text = "Mint open now →";
+    else if (phase === 1 && sealed) { text = "Reveal pending"; href = null; }
+    else if (revealed && v.nextResolve < v.receipts) text = "Resolving →";
+    else text = "View collection →";
+
+    const cta = document.getElementById("cta");
+    if (!cta) return;
+    cta.textContent = text;
+    if (href) cta.setAttribute("href", href);
+    else cta.removeAttribute("href");
+  }
+  run().catch(() => {});
+})();
 </script>
 
 </body>
