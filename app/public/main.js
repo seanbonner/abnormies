@@ -947,14 +947,16 @@ async function loadReceipts() {
 
   listEl.innerHTML = "";
   for (let i = 0; i < count; i++) {
-    const row = document.createElement("div");
-    row.className = "receipt-row";
-    row.appendChild(skyThumb("receipt-thumb"));
-    const status = document.createElement("span");
-    status.className = "receipt-status";
-    status.textContent = "[unrevealed]";
-    row.appendChild(status);
-    listEl.appendChild(row);
+    const cell = document.createElement("div");
+    cell.className = "receipt-cell";
+    // Post-reveal swap: replace skyThumb(...) with the Abnormie's <img> and the
+    // label text with the token id. Same cell structure, one line each, no layout change.
+    cell.appendChild(skyThumb("receipt-thumb"));
+    const label = document.createElement("span");
+    label.className = "receipt-label";
+    label.textContent = "[unrevealed]";
+    cell.appendChild(label);
+    listEl.appendChild(cell);
   }
 }
 

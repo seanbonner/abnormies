@@ -262,8 +262,8 @@ header { margin-bottom: 28px; }
 }
 .empty[hidden] { display: none; }
 
-/* Rows (claim + receipts) */
-.claim-row, .receipt-row {
+/* Claim list rows (receipts now use the grid below) */
+.claim-row {
   display: flex;
   align-items: center;
   gap: 14px;
@@ -272,7 +272,7 @@ header { margin-bottom: 28px; }
   border-bottom: none;
   background: var(--panel);
 }
-.claim-row:last-child, .receipt-row:last-child { border-bottom: 1px solid var(--border); }
+.claim-row:last-child { border-bottom: 1px solid var(--border); }
 
 .normie-id, .receipt-id {
   font-family: ui-monospace, "SF Mono", Consolas, monospace;
@@ -281,25 +281,42 @@ header { margin-bottom: 28px; }
   min-width: 120px;
 }
 
-.receipt-status {
-  font-family: ui-monospace, "SF Mono", Consolas, monospace;
-  font-size: 12px;
-  color: var(--muted);
-  margin-left: auto;
+/* My Abnormies grid. Each cell stacks a square Sky stand-in over its label.
+   Built so post-reveal can swap the SVG for a real <img> and the label text for
+   a token id with no layout change. */
+#receipts-list {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 20px 16px;
 }
 
-/* Sky-colored stand-in for an unrevealed Abnormie canvas. Border carries the
-   edge since Sky (#e3e5e4) is near the panel background. */
+.receipt-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Sky-colored stand-in for an unrevealed Abnormie canvas. Square to the cell
+   width; border carries the edge since Sky (#e3e5e4) is near the panel. */
 .receipt-thumb {
-  flex: 0 0 auto;
-  display: inline-block;
-  vertical-align: middle;
-  width: 40px;
-  height: 40px;
-  margin-right: 14px;
-  border: 1px solid var(--border);
+  width: 100%;
+  aspect-ratio: 1;
+  display: block;
+  border: 0.5px solid var(--border);
   background: var(--sky);
   image-rendering: pixelated;
+}
+
+.receipt-label {
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-size: 11px;
+  color: var(--muted);
+  text-align: center;
+}
+
+@media (max-width: 520px) {
+  #receipts-list { grid-template-columns: repeat(3, 1fr); }
 }
 
 .claim-row .btn { margin-left: auto; }
