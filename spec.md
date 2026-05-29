@@ -1,7 +1,7 @@
 ---
 title: "Abnormies: Production Spec"
 status: draft
-version: 0.15
+version: 0.16
 source_collection: Normies (Serc, Feb 2026)
 source_contract: 0x9eb6e2025b64f340691e424b7fe7022ffde12438
 agent_adapter: Adapter8004 (Premm, ERC-8217)
@@ -147,6 +147,14 @@ Claims are 1:1 by quantity, not by token ID. A Normies holder with N Normies can
   - **Fallback seal**: anyone may call `sealForReveal()` after `phase1ClosedAt + 14 days` to seal the current receipt list and trigger the reveal sequence, regardless of remaining supply.
 
 After sealing, no more mints or airdrops are accepted. Unminted slots if any (only possible under the fallback path) remain unminted forever; the corresponding Abnormie IDs simply never enter circulation.
+
+## Phase 3 · Reveal
+
+Once Phase 2 closes and the entropy window passes, the reveal phase begins. The collection reveals through the same network mechanic that shapes the art itself. Anyone may call resolveReceipts(N), paying gas to advance the reveal cursor by N positions. The next N receipts in the queue are resolved: each receives a randomly drawn Abnormie token ID and a randomly drawn seed Normie pairing. The receipt becomes a real ERC-721 token in its owner's wallet.
+
+Resolution is strictly monotonic. The caller has no control over which receipts they advance. A claimant clicking 'reveal' on the site may resolve their own receipts, or someone else's, depending on the current cursor position. Receipts at the front of the queue resolve first; later receipts wait until the cursor reaches them.
+
+The reveal continues until all receipts are resolved. The cost of reveal is borne by whoever chooses to advance the queue, in proportion to their participation. There is no fee, deposit, or bounty. Only gas.
 
 ## Reveal
 
@@ -482,6 +490,7 @@ Frontend deployed on Cloudflare Pages. Mirrored to IPFS, pointed at via ENS (`ab
 
 ## Changelog
 
+- **v0.16**: Added Phase 3 (reveal) documentation.
 - **v0.15**: Named the inversion condition Aligned. Mechanism otherwise unchanged from v0.14.
 - **v0.14**: Reveal architecture replaced. Chainlink VRF v2.5 (rolling batches in Phase 2 and single call in Phase 1) is removed entirely. New mechanism is a single collection-wide seal-then-commit-then-reveal flow using EVM blockhashes for entropy: receipts seal on Phase 2 supply exhaustion or via permissionless `sealForReveal()` 14 days after Phase 1 close; `reveal()` mixes four blockhashes from `sealedAtBlock + 8` through `sealedAtBlock + 11` into the seed and is callable from `sealedAtBlock + 13` through `sealedAtBlock + 240`; `reseal()` restarts the window if reveal is not called in time. No oracle dependency; no LINK funding required. Owner airdrop added: gas-only mint of unminted Phase 2 receipts to any address, capped at 50 per call. Phase 2 mint price lowered to 0.005 ETH to match Normies. Phase 1 and Phase 2 receipts unified into a single list resolved by `resolveReceipts(count)` in strictly monotonic order. Proposer-bias bound documented honestly: the final entropy block's proposer can withhold for one conditional reroll at the cost of forfeited MEV; multi-block mixing prevents intermediate-block bias but does not fully eliminate proposer influence. For a small-fractional-stakes art project this is an acceptable bound. Mechanism otherwise unchanged from v0.13.
 - **v0.13**: Static-state snapshots clarified. The terminal-state rule on Axis 1 (Static Abnormies immune to future events) is now made explicit for all seed-derived render inputs: `cirrusCount`, `seedCustomized`, `seedBurned`, and `Dead At` block are each snapshotted into per-Abnormie storage at the moment of freeze. Source Life and the Dead At trait read from these snapshots for Static Abnormies and from live seed state for Active Abnormies. Cirrus counter behavior added: saturates at `uint16.max` rather than reverting, preserving liveness of pokes and Abnormie transfers in the extreme edge case. Phase 1 and Phase 2 reveal resolution clarified: receipts are resolved in strictly monotonic order to prevent reordering attacks against the public VRF seed. Thunder and Lightning inline-poke both the burner's seed and the freeze target's seed at action time to ensure all checks and snapshots operate on the latest observable seed state. Cancellation Rate trait removed; counting total touches on-chain is expensive and the canvas already conveys cancellation visually. Mechanism otherwise unchanged from v0.12.

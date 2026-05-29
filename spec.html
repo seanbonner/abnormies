@@ -258,7 +258,7 @@ body {
   <a href="index.html" class="back-link">← Abnormies</a>
 
   <div class="wordmark">SPECIFICATION</div>
-  <div class="subtitle">Draft v0.15 · Pre-deploy</div>
+  <div class="subtitle">Draft v0.16 · Pre-deploy</div>
 
   <div class="spec">
 <p><em>Co-authored with Claude Opus 4.7. This document may contain
@@ -550,6 +550,22 @@ regardless of remaining supply.</li>
 <p>After sealing, no more mints or airdrops are accepted. Unminted slots
 if any (only possible under the fallback path) remain unminted forever;
 the corresponding Abnormie IDs simply never enter circulation.</p>
+<h2 id="phase-3-reveal">Phase 3 · Reveal</h2>
+<p>Once Phase 2 closes and the entropy window passes, the reveal phase
+begins. The collection reveals through the same network mechanic that
+shapes the art itself. Anyone may call resolveReceipts(N), paying gas to
+advance the reveal cursor by N positions. The next N receipts in the
+queue are resolved: each receives a randomly drawn Abnormie token ID and
+a randomly drawn seed Normie pairing. The receipt becomes a real ERC-721
+token in its owner's wallet.</p>
+<p>Resolution is strictly monotonic. The caller has no control over which
+receipts they advance. A claimant clicking 'reveal' on the site may
+resolve their own receipts, or someone else's, depending on the current
+cursor position. Receipts at the front of the queue resolve first; later
+receipts wait until the cursor reaches them.</p>
+<p>The reveal continues until all receipts are resolved. The cost of
+reveal is borne by whoever chooses to advance the queue, in proportion to
+their participation. There is no fee, deposit, or bounty. Only gas.</p>
 <h2 id="reveal">Reveal</h2>
 <p>Random assignment of receipts to Abnormie IDs happens in a single
 collection-wide reveal after the receipt list is sealed. The reveal
@@ -1243,125 +1259,6 @@ Nimbostratus</strong></li>
 <li>Action names: <strong>Thunder · Lightning</strong></li>
 <li>State axes: <strong>Active / Static · Living / Dead</strong></li>
 <li>Website: <strong>abnormies.art</strong></li>
-</ul>
-<h2 id="changelog">Changelog</h2>
-<ul>
-<li><strong>v0.15</strong>: Named the inversion condition Aligned.
-Mechanism otherwise unchanged from v0.14.</li>
-<li><strong>v0.14</strong>: Reveal architecture replaced. Chainlink VRF
-v2.5 (rolling batches in Phase 2 and single call in Phase 1) is removed
-entirely. New mechanism is a single collection-wide
-seal-then-commit-then-reveal flow using EVM blockhashes for entropy:
-receipts seal on Phase 2 supply exhaustion or via permissionless
-<code>sealForReveal()</code> 14 days after Phase 1 close;
-<code>reveal()</code> mixes four blockhashes from
-<code>sealedAtBlock + 8</code> through <code>sealedAtBlock + 11</code>
-into the seed and is callable from <code>sealedAtBlock + 13</code>
-through <code>sealedAtBlock + 240</code>; <code>reseal()</code> restarts
-the window if reveal is not called in time. No oracle dependency; no LINK
-funding required. Owner airdrop added: gas-only mint of unminted Phase 2
-receipts to any address, capped at 50 per call. Phase 2 mint price
-lowered to 0.005 ETH to match Normies. Phase 1 and Phase 2 receipts
-unified into a single list resolved by <code>resolveReceipts(count)</code>
-in strictly monotonic order. Proposer-bias bound documented honestly: the
-final entropy block’s proposer can withhold for one conditional reroll at
-the cost of forfeited MEV; multi-block mixing prevents intermediate-block
-bias but does not fully eliminate proposer influence. For a
-small-fractional-stakes art project this is an acceptable bound. Mechanism
-otherwise unchanged from v0.13.</li>
-<li><strong>v0.13</strong>: Static-state snapshots clarified. The
-terminal-state rule on Axis 1 (Static Abnormies immune to future events)
-is now made explicit for all seed-derived render inputs:
-<code>cirrusCount</code>, <code>seedCustomized</code>,
-<code>seedBurned</code>, and <code>Dead At</code> block are each
-snapshotted into per-Abnormie storage at the moment of freeze. Source
-Life and the Dead At trait read from these snapshots for Static
-Abnormies and from live seed state for Active Abnormies. Cirrus counter
-behavior added: saturates at <code>uint16.max</code> rather than
-reverting, preserving liveness of pokes and Abnormie transfers in the
-extreme edge case. Phase 1 and Phase 2 reveal resolution clarified:
-receipts are resolved in strictly monotonic order to prevent reordering
-attacks against the public VRF seed. Thunder and Lightning inline-poke
-both the burner’s seed and the freeze target’s seed at action time to
-ensure all checks and snapshots operate on the latest observable seed
-state. Cancellation Rate trait removed; counting total touches on-chain
-is expensive and the canvas already conveys cancellation visually.
-Mechanism otherwise unchanged from v0.12.</li>
-<li><strong>v0.12</strong>: Awakening flow correction. The
-<code>agentIdForBinding</code> reverse-lookup function documented at
-<code>adapter8004.xyz/docs/contract</code> is not present on the
-deployed Adapter8004 implementation (verified by mainnet-fork testing).
-<code>pokeAwakening</code> therefore takes a caller-supplied
-<code>agentId</code> and verifies the binding via
-<code>bindingOf(agentId)</code>. The frontend resolves the agentId
-off-chain via <code>api.normies.art/agents/binding/{normieId}</code> and
-embeds it in the transaction; users never enter or see an agentId.
-Treasury added: an immutable address set at deploy receives Phase 2 mint
-revenue via a permissionless <code>withdraw()</code> function. Treasury
-and royalty receiver are independent constructor parameters and may be
-the same or different. Note added that awakening and customization are
-independent signals and should not be treated as proxies. Phase 1
-<code>lastObservedSeedOwner</code> initialization made explicit in the
-architecture summary. Mechanism otherwise unchanged from v0.11.</li>
-<li><strong>v0.11</strong>: Customization signal correction. The
-customization status is not in
-<code>INormiesStorage.getTokenTraits</code> as previously documented;
-<code>getTokenTraits</code> returns eight trait IDs (Type, Gender, Age,
-Hair Style, Facial Feature, Eyes, Expression, Accessory). Customization
-is tracked on a separate contract, <code>NormiesCanvasStorage</code>
-(<code>0xC255BE0983776BAB027a156681b6925cde47B2D1</code>), exposing
-<code>isTransformed(tokenId)</code>. <code>pokeSeed</code> now reads
-<code>isTransformed</code>; the source Nimbostratus accrual rule
-(binary, 12 pixels on first observed true) is unchanged. Adapter8004
-binding lookup corrected: <code>bindingOf</code> takes an
-<code>agentId</code>, not a normie id. Phase 1 duration set to 2 days
-(down from 7). Locked parameters expanded to include renderer topology,
-Phase 1 duration, and Phase 2 reveal mechanism. Mechanism otherwise
-unchanged.</li>
-<li><strong>v0.10</strong>: Mechanism corrected. EVM view functions
-cannot read past event logs from other contracts (Solidity
-documentation, explicit). State advancement specified via permissionless
-<code>pokeSeed</code>, auto-pokes via
-<code>Abnormies._beforeTokenTransfer</code>, and inline updates from
-holder actions. Cirrus is “observed owner changes via pokes” rather than
-exact transfer count. Source Nimbostratus is binary (one 12-pixel batch
-when customization first observed true), not a per-event count. Phase 1
-claim initializes seed state from a merkle snapshot at deploy. Thunder,
-Lightning, cancellation, plateau dynamics, freeze rules, and
-agent-ownership inversion unchanged from v0.9. Traits updated:
-<code>Source Customizations</code> (integer) becomes
-<code>Source Customized</code> (boolean). Architecture summary and
-locked parameters updated to reflect mechanism. Out of scope expanded to
-note the EVM constraint.</li>
-<li><strong>v0.9</strong>: Naming pass locked. Cloud terminology
-throughout. Layers are Sky / Cirrus / Altocumulus / Nimbostratus.
-Destructive actions are Thunder (burn a Dead Abnormie, Altocumulus
-cascade, plus freeze) and Lightning (burn a Living-customized Abnormie,
-Nimbostratus cascade, plus freeze). State model restructured as two
-independent binary axes: Active/Static (mutability) and Living/Dead
-(source life). Cascades affect Active Abnormies regardless of
-Living/Dead, so Dead-Active Abnormies continue receiving Thunder and
-Lightning marks until explicitly frozen. The Static+Dead combination
-natively expresses what earlier drafts called Posthumous Seal.
-Plain-language instructions on all destructive actions; cloud
-terminology reserved for layer and action names so users always know
-what an action does. Source-Nimbostratus and Lightning-Nimbostratus
-share the darkest color (visually indistinguishable;
-metadata-separable). Conceptually, the collection also ties into Sean
-Bonner’s forthcoming “Static” photographic series.</li>
-<li><strong>v0.8</strong>: Adapter8004 architecture locked. Simplified
-inversion check.</li>
-<li><strong>v0.7</strong>: Locked Normies contract address.</li>
-<li><strong>v0.6</strong>: Lightning mechanic added. Agent-ownership
-inversion added.</li>
-<li><strong>v0.5</strong>: XOR pixel cancellation rule. Mint counts as
-transfer #1 (later superseded by snapshot-and-poke model).</li>
-<li><strong>v0.4</strong>: Visual independence from Normies
-principle.</li>
-<li><strong>v0.3</strong>: Solo deployment. Four-color palette.</li>
-<li><strong>v0.2</strong>: Random claim assignment. Phase 2 mint fee
-0.01 ETH.</li>
-<li><strong>v0.1</strong>: Initial spec.</li>
 </ul>
 
   </div>
