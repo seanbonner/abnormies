@@ -286,16 +286,18 @@ async function refreshAll() {
 // So the claim UI must gate on the time window too, not on phase() alone, or it
 // will keep offering claims that revert.
 async function refreshPhaseAndSupply() {
-  const [phase, sealed, revealed, receiptsLen, maxSupply, deployedAt, phase1Duration, block] = await Promise.all([
-    reader.read.phase(),
-    reader.read.isSealed(),
-    reader.read.revealed(),
-    reader.read.receiptsLength(),
-    reader.read.MAX_SUPPLY(),
-    reader.read.deployedAt(),
-    reader.read.PHASE_1_DURATION(),
-    publicClient.getBlock()
-  ]);
+  const [phase, sealed, revealed, receiptsLen, maxSupply, deployedAt, phase1Duration, nextResolve, block] =
+    await Promise.all([
+      reader.read.phase(),
+      reader.read.isSealed(),
+      reader.read.revealed(),
+      reader.read.receiptsLength(),
+      reader.read.MAX_SUPPLY(),
+      reader.read.deployedAt(),
+      reader.read.PHASE_1_DURATION(),
+      reader.read.nextResolveIndex(),
+      publicClient.getBlock()
+    ]);
 
   currentPhase = Number(phase);
 
@@ -313,6 +315,19 @@ async function refreshPhaseAndSupply() {
   else if (currentPhase === 1 && sealed) label = "Reveal pending";
   else label = "Revealed";
   $("phase-label").textContent = label;
+
+  // Page subtitle: terse UX-phase label under the wordmark, derived from the same
+  // signals as the status label above. phase() is only 0/1/2 on-chain; the sealed,
+  // resolving, and resolved states come from isSealed, revealed, and
+  // nextResolveIndex vs receiptsLength, not from distinct phase() values.
+  let subtitle;
+  if (claimOpen) subtitle = "Phase 1 · Claim";
+  else if (phase1ClosedByTime) subtitle = "Phase 1 · Closed";
+  else if (currentPhase === 1 && !sealed) subtitle = "Phase 2 · Mint";
+  else if (currentPhase === 1 && sealed) subtitle = "Reveal pending";
+  else if (revealed && nextResolve < receiptsLen) subtitle = "Resolving";
+  else subtitle = "Revealed";
+  $("page-subtitle").textContent = subtitle;
 
   // Remaining supply framed as a countdown: total cap minus receipts created
   // so far (claims in Phase 1; claims + mints + airdrops once Phase 2 opens).
