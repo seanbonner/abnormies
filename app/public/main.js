@@ -693,23 +693,36 @@ async function loadEligible() {
   btn.hidden = true;
 
   if (!claimOpen) {
-    list.innerHTML = "";
+    list.replaceChildren();
     empty.hidden = true;
     eligibleShard = null;
     return;
   }
   if (vaultInvalid) {
     // Malformed vault address; onVaultInput already surfaced the inline error.
-    list.innerHTML = "";
+    list.replaceChildren();
     empty.hidden = true;
     eligibleShard = null;
     return;
   }
   if (!account) {
-    list.innerHTML = "";
+    list.replaceChildren();
     eligibleShard = null;
     empty.hidden = false;
     empty.textContent = "Connect a wallet to see your eligible Normies.";
+    return;
+  }
+
+  // Chain gate: don't fetch a shard while the wallet is on the wrong network.
+  // Claiming requires the expected chain (same condition used for the claim/mint
+  // buttons), and fetching off-chain only yields confusing state. renderWalletBar()
+  // already shows the wrong-network warn banner, so set only the eligibility empty
+  // state here.
+  if (account && walletChainId != null && walletChainId !== expectedChainId) {
+    list.replaceChildren();
+    eligibleShard = null;
+    empty.hidden = false;
+    empty.textContent = `Switch your wallet to ${CHAIN_NAMES[expectedChainId] || expectedChainId} to check eligibility.`;
     return;
   }
 
@@ -719,23 +732,43 @@ async function loadEligible() {
     ? "No eligible Normies for that address."
     : "Your wallet was not a Normies holder at the snapshot block.";
 
-  list.innerHTML = "<div class='loading'>Loading eligible Normies…</div>";
+  const loading = document.createElement("div");
+  loading.className = "loading";
+  loading.textContent = "Loading eligible Normies…";
+  list.replaceChildren(loading);
   empty.hidden = true;
 
+  // Resolve the shard. The proofs host returns an HTML page (status 200) for a
+  // missing shard, so a 404-only check would let that HTML reach the JSON parser
+  // and throw. Read the body and parse defensively: a 404 or any non-JSON body
+  // means "no shard for this address" (the not-a-holder empty state), not an error.
+  // Only genuine failures (network error, or a non-OK status other than 404) raise
+  // the red error banner.
   let shard = null;
   try {
     const res = await fetch(`./proofs/owner/${target.toLowerCase()}.json`);
-    if (res.status === 404) {
-      list.innerHTML = "";
+    if (!res.ok && res.status !== 404) throw new Error(`HTTP ${res.status}`);
+
+    let parsed = null;
+    if (res.status !== 404) {
+      const body = await res.text();
+      try {
+        parsed = JSON.parse(body);
+      } catch {
+        parsed = null; // HTML / non-JSON body: treated as a missing shard below.
+      }
+    }
+
+    if (res.status === 404 || parsed === null) {
+      list.replaceChildren();
       eligibleShard = null;
       empty.hidden = false;
       empty.textContent = notHolderMsg;
       return;
     }
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    shard = await res.json();
+    shard = parsed;
   } catch (err) {
-    list.innerHTML = "";
+    list.replaceChildren();
     eligibleShard = null;
     empty.hidden = true;
     showBanner("error", `Could not load eligibility. ${describeError(err)} Retry with Refresh.`);
@@ -743,7 +776,7 @@ async function loadEligible() {
   }
 
   if (!Array.isArray(shard) || shard.length === 0) {
-    list.innerHTML = "";
+    list.replaceChildren();
     eligibleShard = null;
     empty.hidden = false;
     empty.textContent = notHolderMsg;
@@ -753,14 +786,19 @@ async function loadEligible() {
   eligibleShard = shard;
   const claimedFlags = await readClaimedFlags(shard);
 
-  list.innerHTML = "";
+  list.replaceChildren();
   let unclaimed = 0;
   shard.forEach((s, i) => {
     if (!claimedFlags[i]) unclaimed++;
     const row = document.createElement("div");
     row.className = "claim-row";
-    row.innerHTML = `<span class="normie-id">Normie #${s.normieId}</span>
-      <span class="badge">${s.customizedAtSnapshot ? "Customized" : "Uncustomized"}</span>`;
+    const idSpan = document.createElement("span");
+    idSpan.className = "normie-id";
+    idSpan.textContent = `Normie #${s.normieId}`;
+    const typeSpan = document.createElement("span");
+    typeSpan.className = "badge";
+    typeSpan.textContent = s.customizedAtSnapshot ? "Customized" : "Uncustomized";
+    row.append(idSpan, typeSpan);
     if (claimedFlags[i]) {
       const badge = document.createElement("span");
       badge.className = "badge badge-claimed";
