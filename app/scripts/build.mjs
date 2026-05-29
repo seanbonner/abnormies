@@ -8,7 +8,10 @@
 //   set -a; source .env; set +a
 //   npm run build
 //
-// Output lands in app/dist/ and is what Cloudflare Pages serves.
+// Output lands in app/dist/ and is what Cloudflare Pages serves. The dist/ contents
+// are published under the /app/ path, so the app's primary page resolves at
+// abnormies.art/app/mint.html. The entry HTML is mint.html (not index.html) so the
+// repo-root teaser keeps abnormies.art/; the detail page is /app/abnormie.html.
 
 import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
