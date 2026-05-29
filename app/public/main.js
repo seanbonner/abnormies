@@ -1075,12 +1075,12 @@ async function loadReceipts() {
 
   if (claimVault) {
     subtitle.hidden = false;
-    subtitle.textContent = `Showing Unrevealed Abnormies for ${short(claimVault)}`;
+    subtitle.textContent = `Showing Abnormies for ${short(claimVault)}`;
   } else {
     subtitle.hidden = true;
   }
 
-  listEl.innerHTML = "<div class='loading'>Loading Unrevealed Abnormies…</div>";
+  listEl.innerHTML = "<div class='loading'>Loading Abnormies…</div>";
   empty.hidden = true;
 
   let len = 0;
@@ -1089,7 +1089,7 @@ async function loadReceipts() {
   } catch {
     listEl.innerHTML = "";
     empty.hidden = false;
-    empty.textContent = "Could not load Unrevealed Abnormies.";
+    empty.textContent = "Could not load Abnormies.";
     return;
   }
 
