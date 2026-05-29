@@ -288,6 +288,20 @@ header { margin-bottom: 28px; }
   margin-left: auto;
 }
 
+/* Sky-colored stand-in for an unrevealed Abnormie canvas. Border carries the
+   edge since Sky (#e3e5e4) is near the panel background. */
+.receipt-thumb {
+  flex: 0 0 auto;
+  display: inline-block;
+  vertical-align: middle;
+  width: 40px;
+  height: 40px;
+  margin-right: 14px;
+  border: 1px solid var(--border);
+  background: var(--sky);
+  image-rendering: pixelated;
+}
+
 .claim-row .btn { margin-left: auto; }
 .claim-row .badge-claimed { margin-left: auto; color: var(--muted); }
 

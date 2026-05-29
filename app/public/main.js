@@ -93,6 +93,25 @@ function hideBanner() {
 }
 const short = (a) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 
+// Inline Sky-colored (#e3e5e4, the renderer's lightest cloud-palette value)
+// stand-in for an Abnormie whose canvas has not been revealed yet. Built via DOM
+// nodes rather than markup so it carries no injection surface. Size comes from CSS.
+function skyThumb(className) {
+  const ns = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(ns, "svg");
+  svg.setAttribute("viewBox", "0 0 40 40");
+  svg.setAttribute("preserveAspectRatio", "none");
+  svg.setAttribute("role", "img");
+  svg.setAttribute("aria-label", "Unrevealed Abnormie");
+  if (className) svg.setAttribute("class", className);
+  const rect = document.createElementNS(ns, "rect");
+  rect.setAttribute("width", "40");
+  rect.setAttribute("height", "40");
+  rect.setAttribute("fill", "#e3e5e4");
+  svg.appendChild(rect);
+  return svg;
+}
+
 // Mirrors EtherPool's describeError: surface the most human-readable field.
 function describeError(err) {
   if (!err) return "Unknown error.";
@@ -914,7 +933,11 @@ async function loadReceipts() {
   for (let i = 0; i < count; i++) {
     const row = document.createElement("div");
     row.className = "receipt-row";
-    row.innerHTML = `<span class="receipt-status">[unrevealed]</span>`;
+    row.appendChild(skyThumb("receipt-thumb"));
+    const status = document.createElement("span");
+    status.className = "receipt-status";
+    status.textContent = "[unrevealed]";
+    row.appendChild(status);
     listEl.appendChild(row);
   }
 }
