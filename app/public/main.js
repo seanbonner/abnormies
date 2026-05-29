@@ -313,6 +313,7 @@ async function refreshPhaseAndSupply() {
   else if (phase1ClosedByTime) label = "Phase 1 closed — Phase 2 opens once closePhase1 is called";
   else if (currentPhase === 1 && !sealed) label = "Phase 2: mint open";
   else if (currentPhase === 1 && sealed) label = "Reveal pending";
+  else if (revealed && nextResolve < receiptsLen) label = "Resolving";
   else label = "Revealed";
   $("phase-label").textContent = label;
 
