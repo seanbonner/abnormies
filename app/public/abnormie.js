@@ -89,7 +89,7 @@ function bootstrap() {
 
   const cfg = window.ABNORMIES_CONFIG || {};
   const expectedChainId = Number(cfg.chainId || 1);
-  const chain = CHAINS[expectedChainId] || sepolia;
+  const chain = CHAINS[expectedChainId] || mainnet;
   const contractAddress = cfg.contractAddress;
 
   // Sky-colored (#e3e5e4, the renderer's lightest cloud value) stand-in shown at
