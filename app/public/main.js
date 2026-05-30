@@ -344,6 +344,8 @@ async function refreshPhaseAndSupply() {
 
   $("claim-section").hidden = !claimOpen;
   $("mint-section").hidden = !(currentPhase === 1 && !sealed);
+  // Persistent reveal-model note: visible during the gated phases (claim + mint), hidden after reveal.
+  $("reveal-note").hidden = !(currentPhase === 0 || currentPhase === 1);
 
   if (currentPhase === 1 && !sealed) await prepareMint();
 }
@@ -478,7 +480,10 @@ async function onMintClick() {
 
     // 5. Success: report the actual count minted, then refresh state + receipts.
     mintInFlight = false; // let the post-mint refresh render an accurate button
-    showBanner("ok", `Minted ${count} ${count === 1 ? "Abnormie" : "Abnormies"} for ${formatEther(value)} ETH.`);
+    showBanner(
+      "ok",
+      "Mint confirmed. Your Abnormies will appear in your wallet and on OpenSea after the Phase III reveal. Nothing else to do until then."
+    );
     await refreshPhaseAndSupply();
     if (account) await loadReceipts();
   } catch (err) {
@@ -1031,10 +1036,9 @@ async function onClaimAll() {
     // Success: refresh phase state, receipts, and per-Normie claimed status. Setting
     // claimInFlight false first lets loadEligible() render an accurate button.
     claimInFlight = false;
-    const noun = claimedSoFar === 1 ? "Abnormie" : "Abnormies";
     showBanner(
       "ok",
-      claimVault ? `Claimed ${claimedSoFar} ${noun} for ${short(claimVault)}.` : `Claimed ${claimedSoFar} ${noun}.`
+      "Claim confirmed. Your Abnormies will appear in your wallet and on OpenSea after the Phase III reveal. Nothing else to do until then."
     );
     await refreshPhaseAndSupply();
     await Promise.allSettled([loadEligible(), loadReceipts()]);
