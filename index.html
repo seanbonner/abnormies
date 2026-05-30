@@ -318,7 +318,7 @@ body {
 
     <p>In 2022, Sterling Crispin published <em>Wiiides</em>, a fully on-chain derivative of CryptoPunks that mutated through transfer activity and decayed toward stripes. CryptoPunks were immutable. Normies are not. Abnormies extend the lineage to a mutable parent, and to a wider range of network events: transfers, customizations, and the destructive choices of other holders. Where Wiiides ended in noise, Abnormies decay toward ambiguity.</p>
 
-    <p>Phase 1 is a 1:1 holder claim open to Normies holders for two days, at gas cost. Phase 2 opens mint to the public at a fixed price. There is no presale, no whitelist, no roadmap beyond the specification. No social accounts. Updates appear here.</p>
+    <p>Phase I is a 1:1 holder claim open to Normies holders for two days, at gas cost. Phase II opens mint to the public at a fixed price. There is no presale, no whitelist, no roadmap beyond the specification. No social accounts. Updates appear here.</p>
 
   </div>
 
@@ -553,7 +553,7 @@ randomize();
     let text = "Claim open now →";
     let href = "/app/mint.html";
     if (phase === 0 && windowOpen) text = "Claim open now →";
-    else if (phase === 0) text = "Phase 1 closed →";
+    else if (phase === 0) text = "Phase I closed →";
     else if (phase === 1 && !sealed) text = "Mint open now →";
     else if (phase === 1 && sealed) { text = "Reveal pending"; href = null; }
     else if (revealed && v.nextResolve < v.receipts) text = "Resolving →";

@@ -316,9 +316,9 @@ async function refreshPhaseAndSupply() {
   const phase1ClosedByTime = currentPhase === 0 && !phase1WindowOpen;
 
   let label;
-  if (claimOpen) label = "Phase 1: claims open";
-  else if (phase1ClosedByTime) label = "Phase 1 closed — Phase 2 opens once closePhase1 is called";
-  else if (currentPhase === 1 && !sealed) label = "Phase 2: mint open";
+  if (claimOpen) label = "Phase I: claims open";
+  else if (phase1ClosedByTime) label = "Phase I closed. Phase II opens once the close transaction is submitted.";
+  else if (currentPhase === 1 && !sealed) label = "Phase II: mint open";
   else if (currentPhase === 1 && sealed) label = "Reveal pending";
   else if (revealed && nextResolve < receiptsLen) label = "Resolving";
   else label = "Revealed";
@@ -329,9 +329,9 @@ async function refreshPhaseAndSupply() {
   // resolving, and resolved states come from isSealed, revealed, and
   // nextResolveIndex vs receiptsLength, not from distinct phase() values.
   let subtitle;
-  if (claimOpen) subtitle = "Phase 1 · Claim";
-  else if (phase1ClosedByTime) subtitle = "Phase 1 · Closed";
-  else if (currentPhase === 1 && !sealed) subtitle = "Phase 2 · Mint";
+  if (claimOpen) subtitle = "Phase I · Claim";
+  else if (phase1ClosedByTime) subtitle = "Phase I · Closed";
+  else if (currentPhase === 1 && !sealed) subtitle = "Phase II · Mint";
   else if (currentPhase === 1 && sealed) subtitle = "Reveal pending";
   else if (revealed && nextResolve < receiptsLen) subtitle = "Resolving";
   else subtitle = "Revealed";
@@ -389,7 +389,7 @@ function renderMint() {
   if (mintMax() < 1) {
     form.hidden = true;
     empty.hidden = false;
-    empty.textContent = "Phase 2 sold out. Awaiting reveal.";
+    empty.textContent = "Phase II sold out. Awaiting reveal.";
     return;
   }
   empty.hidden = true;
@@ -421,7 +421,7 @@ async function onMintClick() {
     return;
   }
   if (currentPhase !== 1) {
-    showBanner("warn", "Minting is only open in Phase 2.");
+    showBanner("warn", "Minting is only open in Phase II.");
     return;
   }
   if (walletChainId != null && walletChainId !== expectedChainId) {
@@ -437,7 +437,7 @@ async function onMintClick() {
     return;
   }
   if (maxNow < 1) {
-    showBanner("warn", "Phase 2 sold out. Awaiting reveal.");
+    showBanner("warn", "Phase II sold out. Awaiting reveal.");
     return;
   }
 
@@ -456,7 +456,7 @@ async function onMintClick() {
       remaining = maxNow;
     }
     if (remaining < 1) {
-      showBanner("warn", "Phase 2 sold out. Awaiting reveal.");
+      showBanner("warn", "Phase II sold out. Awaiting reveal.");
       await refreshPhaseAndSupply();
       return;
     }
@@ -880,7 +880,7 @@ async function onClaimAll() {
     return;
   }
   if (!claimOpen) {
-    showBanner("warn", "Claiming is only open during the Phase 1 window.");
+    showBanner("warn", "Claiming is only open during the Phase I window.");
     return;
   }
   if (walletChainId != null && walletChainId !== expectedChainId) {
