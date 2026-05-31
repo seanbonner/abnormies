@@ -1,8 +1,8 @@
 {
-  "snapshotBlock": 25169317,
-  "root": "0x09721c6cd675f08da79e27fae6c5a36ec0afc44e7ca27c79175d4b4c12893220",
-  "totalEligible": 8100,
-  "totalDead": 1900,
-  "ownerCount": 1829,
-  "generatedAt": "2026-05-25T22:43:43.220Z"
+  "snapshotBlock": 25182664,
+  "root": "0xa22cf1ede9ff6e94eca8497788a543cd1b98ce1f44bdf993168d4ebd34344df6",
+  "totalEligible": 8069,
+  "totalDead": 1931,
+  "ownerCount": 1861,
+  "generatedAt": "2026-05-29T19:08:07.026Z"
 }
