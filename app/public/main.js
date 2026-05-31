@@ -293,13 +293,14 @@ async function refreshAll() {
 // So the claim UI must gate on the time window too, not on phase() alone, or it
 // will keep offering claims that revert.
 async function refreshPhaseAndSupply() {
-  const [phase, sealed, revealed, receiptsLen, phase2Slots, deployedAt, phase1Duration, nextResolve, block] =
+  const [phase, sealed, revealed, receiptsLen, phase2Slots, maxSupply, deployedAt, phase1Duration, nextResolve, block] =
     await Promise.all([
       reader.read.phase(),
       reader.read.isSealed(),
       reader.read.revealed(),
       reader.read.receiptsLength(),
       reader.read.phase2RemainingSlots(),
+      reader.read.MAX_SUPPLY(),
       reader.read.deployedAt(),
       reader.read.PHASE_1_DURATION(),
       reader.read.nextResolveIndex(),
@@ -338,9 +339,10 @@ async function refreshPhaseAndSupply() {
   $("page-subtitle").textContent = subtitle;
   document.title = `Abnormies — ${subtitle}`;
 
-  // Slots still mintable in Phase 2, read straight from the contract so admin
-  // reserves and any non-mint receipts don't skew the displayed countdown.
-  $("progress-counter").textContent = `${phase2Slots.toString()} remaining`;
+  // Minted count: MAX_SUPPLY minus the contract's authoritative Phase 2 slot
+  // count, so admin reserves and any non-mint receipts don't skew the total.
+  const minted = maxSupply - phase2Slots;
+  $("progress-counter").textContent = `${minted.toString()} / ${maxSupply.toString()} minted`;
 
   $("claim-section").hidden = !claimOpen;
   $("mint-section").hidden = !(currentPhase === 1 && !sealed);
