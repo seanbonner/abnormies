@@ -58,6 +58,7 @@ const rootFiles = [
   "spec.md",
   "favicon.ico",
   "favicon.svg",
+  "og.png",
   "_headers",
   "robots.txt",
   "llms.txt"
