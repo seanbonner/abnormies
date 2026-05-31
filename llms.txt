@@ -12,4 +12,4 @@ Abnormies is paired 1:1 with Normies. Each Abnormie has a seed Normie whose on-c
 
 ## Status
 
-Site is live. Smart contracts are forthcoming.
+Site is live. Smart contracts are deployed; Phase II public mint is open.
