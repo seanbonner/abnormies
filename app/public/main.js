@@ -336,6 +336,7 @@ async function refreshPhaseAndSupply() {
   else if (revealed && nextResolve < receiptsLen) subtitle = "Resolving";
   else subtitle = "Revealed";
   $("page-subtitle").textContent = subtitle;
+  document.title = `Abnormies — ${subtitle}`;
 
   // Remaining supply framed as a countdown: total cap minus receipts created
   // so far (claims in Phase 1; claims + mints + airdrops once Phase 2 opens).
