@@ -1,9 +1,9 @@
-// Reads holders.tsv (output of holders.mjs) and writes batch1.json … batch4.json
+// Reads holders.tsv (output of holders.mjs) and writes batch1.json … batchN.json
 // containing checksummed addresses of every Phase-2 minter (mint-only + both),
-// split into roughly equal batches sized for the airdrop ceremony.
+// split into the minimum number of batches such that each batch satisfies the
+// proxy's MAX_RECEIPTS_PER_BATCH = 1000 cap (recipients * countPerWallet <= 1000).
 //
-// Each batch fits comfortably in a single airdropBatch(recipients, 10) call:
-// ~93 recipients * 10 tokens ≈ 22M gas, well under the 30M block limit.
+// Usage: COUNT_PER_WALLET=10 node scripts/split-batches.mjs
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
@@ -21,11 +21,20 @@ const minters = tsv
   })
   .filter((h) => h.mints > 0);
 
-console.log(`Found ${minters.length} Phase-2 minters (mint-only + both claim & mint).`);
+const COUNT_PER_WALLET = Number(process.env.COUNT_PER_WALLET || 10);
+const MAX_RECEIPTS_PER_BATCH = 1000; // mirrors AirdropProxy.MAX_RECEIPTS_PER_BATCH
 
-// Split into 4 near-equal batches. With 370 minters: 93 + 93 + 92 + 92 = 370.
-// With more or fewer, the split still divides as evenly as possible.
-const N_BATCHES = 4;
+if (COUNT_PER_WALLET < 1 || COUNT_PER_WALLET > 50) {
+  console.error(`COUNT_PER_WALLET must be in [1, 50]. Got ${COUNT_PER_WALLET}.`);
+  process.exit(1);
+}
+
+const maxPerBatch = Math.floor(MAX_RECEIPTS_PER_BATCH / COUNT_PER_WALLET);
+const N_BATCHES = Math.ceil(minters.length / maxPerBatch);
+
+console.log(`Found ${minters.length} Phase-2 minters (mint-only + both claim & mint).`);
+console.log(`countPerWallet: ${COUNT_PER_WALLET}, max recipients/batch: ${maxPerBatch}, batches: ${N_BATCHES}.`);
+
 const base = Math.floor(minters.length / N_BATCHES);
 const remainder = minters.length % N_BATCHES;
 const batches = [];
@@ -40,9 +49,10 @@ let total = 0;
 batches.forEach((batch, i) => {
   const path = resolve(here, `batch${i + 1}.json`);
   writeFileSync(path, JSON.stringify(batch, null, 2) + "\n");
-  console.log(`  batch${i + 1}.json: ${batch.length} recipients`);
+  const receipts = batch.length * COUNT_PER_WALLET;
+  console.log(`  batch${i + 1}.json: ${batch.length} recipients * ${COUNT_PER_WALLET} = ${receipts} receipts`);
   total += batch.length;
 });
 
-console.log(`Total: ${total} recipients * 10 tokens = ${total * 10} airdrop tokens.`);
-console.log("\nNext: confirm phase2RemainingSlots >= ${total * 10} + buffer before executing.");
+console.log(`Total: ${total} recipients * ${COUNT_PER_WALLET} tokens = ${total * COUNT_PER_WALLET} airdrop tokens.`);
+console.log(`\nNext: confirm phase2RemainingSlots >= ${total * COUNT_PER_WALLET} + buffer before executing.`);
