@@ -206,6 +206,7 @@ async function init() {
   $("vault-select").addEventListener("change", onVaultSelect);
   $("reveal-count").addEventListener("input", updateRevealSlider);
   $("reveal-btn").addEventListener("click", onRevealClick);
+  $("trigger-reveal-btn").addEventListener("click", onTriggerRevealClick);
 
   if (!contractAddress || !isAddress(contractAddress)) {
     showBanner("error", "No contract address configured. Set FRONTEND_CONTRACT_ADDRESS and rebuild.");
@@ -388,7 +389,7 @@ async function refreshPhaseAndSupply() {
   else if (phase1ClosedByTime) subtitle = "Phase I · Closed";
   else if (currentPhase === 1 && !sealed) subtitle = "Phase II · Mint";
   else if (currentPhase === 1 && sealed) subtitle = "Reveal pending";
-  else if (revealed && nextResolve < receiptsLen) subtitle = "Phase 3 · Reveal";
+  else if (revealed && nextResolve < receiptsLen) subtitle = "Phase III · Reveal";
   else subtitle = "Revealed";
   $("page-subtitle").textContent = subtitle;
   document.title = `Abnormies — ${subtitle}`;
@@ -402,6 +403,12 @@ async function refreshPhaseAndSupply() {
   $("mint-section").hidden = !(currentPhase === 1 && !sealed);
   // Persistent reveal-model note: visible during the gated phases (claim + mint), hidden after reveal.
   $("reveal-note").hidden = !(currentPhase === 0 || currentPhase === 1);
+
+  // Seal-to-reveal gap: the contract is sealed but reveal() hasn't been called yet. Expose the
+  // permissionless reveal() trigger so anyone can mix the entropy blocks and unblock
+  // resolveReceipts. Stays visible until `revealed` flips true.
+  const sealedNotRevealed = currentPhase === 1 && sealed && !revealed;
+  $("seal-section").hidden = !sealedNotRevealed;
 
   // Phase 3: reveal is live once revealed() is true; "in progress" until the
   // monotonic cursor (nextResolveIndex) reaches receiptsLength, then "complete".
@@ -542,6 +549,43 @@ async function onRevealClick() {
     btn.textContent = original;
     btn.disabled = false;
     $("refresh-btn").disabled = false;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Trigger reveal (one-shot permissionless reveal() — mixes entropy blocks)
+// ---------------------------------------------------------------------------
+// reveal() is external/permissionless, no args, no value. Must be called within
+// REVEAL_EXPIRY_BLOCKS (240, ~50 min) of seal or anyone has to reseal() first.
+// Surfaced here so the seal→reveal gap doesn't require Sean to fire it manually.
+async function onTriggerRevealClick() {
+  const status = $("trigger-reveal-status");
+  const btn = $("trigger-reveal-btn");
+  if (!account || !walletClient) {
+    await connect();
+    return;
+  }
+  if (walletChainId != null && walletChainId !== expectedChainId) {
+    status.textContent = `Switch your wallet to ${CHAIN_NAMES[expectedChainId] || expectedChainId} (chainId ${expectedChainId}) to lock in the seed.`;
+    return;
+  }
+  btn.disabled = true;
+  status.textContent = "Sending…";
+  try {
+    const hash = await walletClient.writeContract({
+      address: contractAddress,
+      abi,
+      functionName: "reveal",
+      args: [],
+      account
+    });
+    status.textContent = `Waiting for confirmation… (tx ${hash.slice(0, 10)}…)`;
+    const receipt = await publicClient.waitForTransactionReceipt({ hash });
+    status.textContent = `Confirmed in block ${receipt.blockNumber.toString()}.`;
+    await refreshPhaseAndSupply();
+  } catch (err) {
+    status.textContent = `Failed to lock seed: ${describeError(err)}`;
+    btn.disabled = false;
   }
 }
 

@@ -75,6 +75,16 @@
     <div id="mint-empty" class="empty" hidden></div>
   </section>
 
+  <!-- Seal-but-not-yet-revealed gap: surface the permissionless reveal() call so anyone
+       can mix the entropy blocks and unblock resolveReceipts. Visible only when phase==1
+       and isSealed and not revealed. -->
+  <section id="seal-section" class="panel" hidden>
+    <h2>Phase III ready</h2>
+    <p>Phase II is complete. The next step locks in the random seed that determines token assignment. Once locked, anyone can advance the reveal below.</p>
+    <button id="trigger-reveal-btn">Lock in seed</button>
+    <p id="trigger-reveal-status"></p>
+  </section>
+
   <!-- Reveal section (Phase 3: revealed, still resolving) -->
   <section id="reveal-section" class="panel" hidden>
     <h2>Reveal</h2>
