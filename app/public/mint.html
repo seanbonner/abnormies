@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Abnormies — Claim</title>
-<meta name="description" content="Abnormies Phase 1: 1:1 holder claim for Normies holders. Pre-reveal.">
+<title>Abnormies</title>
+<meta name="description" content="Abnormies claim and mint interface. Pre-reveal.">
 <link rel="stylesheet" href="./styles.css">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="/favicon.ico" sizes="32x32">
@@ -15,7 +15,7 @@
 
   <header>
     <div class="wordmark">ABNORMIES</div>
-    <div id="page-subtitle" class="tagline">Phase 1 · Claim</div>
+    <div id="page-subtitle" class="tagline">Loading…</div>
   </header>
 
   <!-- Wallet bar -->
@@ -23,11 +23,9 @@
     <button id="connect-btn" class="btn btn-outline">Connect</button>
     <div class="wallet-info">
       <span id="wallet-address" class="wallet-address">Not connected</span>
-      <span id="wallet-chain" class="wallet-chain"></span>
     </div>
     <div class="wallet-meta">
-      <div><span class="label">Expected</span><span id="expected-chain">—</span></div>
-      <div><span class="label">Supply</span><span id="progress-counter">—</span></div>
+      <div><span id="progress-counter">—</span></div>
     </div>
     <button id="refresh-btn" class="btn btn-outline">Refresh</button>
   </div>
@@ -40,6 +38,9 @@
     <span class="label">Status</span>
     <span id="phase-label" class="phase-label">Loading…</span>
   </div>
+
+  <!-- Reveal-model note: shown during the gated phases (Phase 1 + Phase 2), hidden after reveal. -->
+  <div id="reveal-note" class="banner banner-info" hidden>Abnormies will reveal during Phase III. Your mint is recorded on-chain but will not appear in your wallet or on OpenSea until token IDs and artwork are generated at reveal. The "My Abnormies" section below shows any Abnormies that have been recorded to your wallet.</div>
 
   <!-- Claim section (Phase 1 only) -->
   <section id="claim-section" class="panel" hidden>
@@ -63,7 +64,7 @@
   <!-- Mint section (Phase 2 only) -->
   <section id="mint-section" class="panel" hidden>
     <h2>Mint</h2>
-    <p class="section-note">Phase 2 public mint. Receipts resolve to Abnormie IDs after reveal.</p>
+    <p class="section-note">Phase II public mint. Receipts resolve to Abnormie IDs after reveal.</p>
     <div id="mint-form" class="mint-controls">
       <label>Count
         <input id="mint-count" type="number" min="1" max="50" value="1" step="1">

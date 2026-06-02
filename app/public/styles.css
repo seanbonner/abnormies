@@ -140,6 +140,7 @@ header { margin-bottom: 28px; }
 .wallet-meta .label {
   display: inline-block;
   width: 78px;
+  margin-right: 8px;
   color: var(--muted);
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -198,6 +199,7 @@ header { margin-bottom: 28px; }
 .banner-error { border-left-color: var(--error); color: var(--error); }
 .banner-warn  { border-left-color: var(--warn);  color: var(--warn); }
 .banner-ok    { border-left-color: var(--ok);    color: var(--ok); }
+.banner-info  { border-left-color: var(--muted); color: var(--muted); }
 
 /* Phase indicator */
 .phase-indicator {

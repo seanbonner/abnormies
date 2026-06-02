@@ -5,6 +5,17 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Abnormies</title>
 <meta name="description" content="A fully on-chain derivative collection paired 1:1 with Normies.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://abnormies.art/">
+<meta property="og:title" content="Abnormies">
+<meta property="og:description" content="A fully on-chain derivative collection paired 1:1 with Normies. Phase II mint open.">
+<meta property="og:image" content="https://abnormies.art/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Abnormies">
+<meta name="twitter:description" content="A fully on-chain derivative collection paired 1:1 with Normies. Phase II mint open.">
+<meta name="twitter:image" content="https://abnormies.art/og.png">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="/favicon.ico" sizes="32x32">
 <style>
@@ -285,7 +296,7 @@ body {
 <div class="wrap">
 
   <div class="wordmark">ABNORMIES</div>
-  <a id="cta" href="/app/mint.html" class="cta">Claim open now →</a>
+  <a id="cta" href="/app/mint.html" class="cta">Loading…</a>
 
   <div class="body">
 
@@ -318,7 +329,7 @@ body {
 
     <p>In 2022, Sterling Crispin published <em>Wiiides</em>, a fully on-chain derivative of CryptoPunks that mutated through transfer activity and decayed toward stripes. CryptoPunks were immutable. Normies are not. Abnormies extend the lineage to a mutable parent, and to a wider range of network events: transfers, customizations, and the destructive choices of other holders. Where Wiiides ended in noise, Abnormies decay toward ambiguity.</p>
 
-    <p>Phase 1 is a 1:1 holder claim open to Normies holders for two days, at gas cost. Phase 2 opens mint to the public at a fixed price. There is no presale, no whitelist, no roadmap beyond the specification. No social accounts. Updates appear here.</p>
+    <p>Phase I is a 1:1 holder claim open to Normies holders for two days, at gas cost. Phase II opens mint to the public at a fixed price. There is no presale, no whitelist, no roadmap beyond the specification. No social accounts. Updates appear here.</p>
 
   </div>
 
@@ -506,9 +517,8 @@ randomize();
 // no deps. On any failure the static "Claim open now →" default is left untouched.
 (() => {
   const CFG = {
-    // TODO(mainnet): set to the deployed mainnet Abnormies address post-deploy.
-    contractAddress: "0xc89571638C609a29cb5c00ad3997493d5fe8be67", // Sepolia placeholder
-    chainId: 11155111
+    contractAddress: "0xFa3BB476E170FF090E2b40ab266eb310Cc3E4b1d",
+    chainId: 1
   };
   const RPC = {
     1: "https://ethereum-rpc.publicnode.com",
@@ -554,7 +564,7 @@ randomize();
     let text = "Claim open now →";
     let href = "/app/mint.html";
     if (phase === 0 && windowOpen) text = "Claim open now →";
-    else if (phase === 0) text = "Phase 1 closed →";
+    else if (phase === 0) text = "Phase I closed →";
     else if (phase === 1 && !sealed) text = "Mint open now →";
     else if (phase === 1 && sealed) { text = "Reveal pending"; href = null; }
     else if (revealed && v.nextResolve < v.receipts) text = "Resolving →";

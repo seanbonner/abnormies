@@ -8,10 +8,13 @@
 //   set -a; source .env; set +a
 //   npm run build
 //
-// Output lands in app/dist/ and is what Cloudflare Pages serves. The dist/ contents
-// are published under the /app/ path, so the app's primary page resolves at
-// abnormies.art/app/mint.html. The entry HTML is mint.html (not index.html) so the
-// repo-root teaser keeps abnormies.art/; the detail page is /app/abnormie.html.
+// app/dist/ is the Cloudflare Pages publish root (served at the site root). This
+// script assembles the COMPLETE site there: the allowlisted repo-root teaser/spec
+// files are copied to dist/ (so abnormies.art/ is the teaser, /spec.html the spec),
+// and the app build is placed under dist/app/ (so the app resolves at
+// /app/mint.html with its assets as siblings). The entry HTML is mint.html (not
+// index.html) so the repo-root teaser keeps abnormies.art/; the detail page is
+// /app/abnormie.html.
 
 import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
@@ -20,8 +23,10 @@ import * as esbuild from "esbuild";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const appRoot = resolve(here, "..");
+const repoRoot = resolve(appRoot, "..");
 const publicDir = resolve(appRoot, "public");
 const dist = resolve(appRoot, "dist");
+const appOut = resolve(dist, "app");
 
 const chainId = Number(process.env.FRONTEND_CHAIN_ID || "1");
 
@@ -44,12 +49,27 @@ const config = {
   rpcUrl: process.env.FRONTEND_RPC_URL || defaultRpcUrls[chainId] || ""
 };
 
-await rm(dist, { recursive: true, force: true });
-await mkdir(resolve(dist, "abi"), { recursive: true });
+// Repo-root files that ship at the publish root (the teaser site). Explicit
+// allowlist — nothing else from the repo root (README.md, CLAUDE.md, .gitignore,
+// .git, app/ source, node_modules, etc.) is copied into the deploy.
+const rootFiles = [
+  "index.html",
+  "spec.html",
+  "spec.md",
+  "favicon.ico",
+  "favicon.svg",
+  "og.png",
+  "_headers",
+  "robots.txt",
+  "llms.txt"
+];
 
-// Copy static assets but skip the JS entry points — esbuild emits the bundled
-// versions below.
-await cp(publicDir, dist, {
+await rm(dist, { recursive: true, force: true });
+await mkdir(resolve(appOut, "abi"), { recursive: true });
+
+// Copy static app assets but skip the JS entry points — esbuild emits the
+// bundled versions below. Everything lands under dist/app/ (served at /app/).
+await cp(publicDir, appOut, {
   recursive: true,
   filter: (src) => !src.endsWith("/main.js") && !src.endsWith("/abnormie.js")
 });
@@ -59,10 +79,10 @@ const artifact = JSON.parse(await readFile(resolve(publicDir, "abi/Abnormies.jso
 if (!Array.isArray(artifact.abi)) {
   throw new Error("public/abi/Abnormies.json has no `abi` array — is it a Foundry artifact?");
 }
-await writeFile(resolve(dist, "abi/Abnormies.json"), `${JSON.stringify({ abi: artifact.abi }, null, 2)}\n`);
+await writeFile(resolve(appOut, "abi/Abnormies.json"), `${JSON.stringify({ abi: artifact.abi }, null, 2)}\n`);
 
 // Runtime config, read by main.js via window.ABNORMIES_CONFIG.
-await writeFile(resolve(dist, "config.js"), `window.ABNORMIES_CONFIG = ${JSON.stringify(config, null, 2)};\n`);
+await writeFile(resolve(appOut, "config.js"), `window.ABNORMIES_CONFIG = ${JSON.stringify(config, null, 2)};\n`);
 
 // Bundle the entries: viem inlined, self-contained modules, no CDN at runtime.
 //   main.js     -> Phase 1/2 claim + mint app (mint.html)
@@ -75,8 +95,14 @@ await esbuild.build({
   minify: true,
   sourcemap: false,
   legalComments: "none",
-  outdir: dist
+  outdir: appOut
 });
+
+// Assemble the teaser site at the publish root: copy only the allowlisted
+// repo-root files into dist/.
+for (const file of rootFiles) {
+  await cp(resolve(repoRoot, file), resolve(dist, file));
+}
 
 if (!config.contractAddress) {
   console.warn("WARNING: FRONTEND_CONTRACT_ADDRESS is empty. The app will show a config error until rebuilt with it set.");

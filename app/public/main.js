@@ -53,6 +53,18 @@ const DELEGATE_REGISTRY_ABI = [
         ]
       }
     ]
+  },
+  {
+    type: "function",
+    name: "checkDelegateForContract",
+    stateMutability: "view",
+    inputs: [
+      { name: "to", type: "address" },
+      { name: "from", type: "address" },
+      { name: "contract_", type: "address" },
+      { name: "rights", type: "bytes32" }
+    ],
+    outputs: [{ name: "", type: "bool" }]
   }
 ];
 
@@ -185,7 +197,6 @@ function isInvalidDelegation(err) {
 // Init
 // ---------------------------------------------------------------------------
 async function init() {
-  $("expected-chain").textContent = `${CHAIN_NAMES[expectedChainId] || `chain ${expectedChainId}`} (${expectedChainId})`;
   $("connect-btn").addEventListener("click", connect);
   $("refresh-btn").addEventListener("click", refreshAll);
   $("mint-count").addEventListener("input", syncMintForm);
@@ -281,18 +292,14 @@ function attachListeners() {
 
 function renderWalletBar() {
   hideBanner();
-  if (account) {
-    $("wallet-address").textContent = short(account);
-    $("wallet-chain").textContent = walletChainId != null ? `chain ${walletChainId}` : "";
-  } else {
-    $("wallet-address").textContent = "Not connected";
-    $("wallet-chain").textContent = "";
-  }
+  $("wallet-address").textContent = account ? short(account) : "Not connected";
+  // Wrong-network warning in plain language. The technical chain readouts (the
+  // "chain N" tag next to the address and the "Expected …" caption) were removed
+  // from mint.html, so this banner is now the only user-facing signal. The
+  // chain-mismatch logic that gates claim/mint and eligibility loading is intact;
+  // this is presentation only.
   if (account && walletChainId != null && walletChainId !== expectedChainId) {
-    showBanner(
-      "warn",
-      `Wrong network. Switch your wallet to ${CHAIN_NAMES[expectedChainId] || expectedChainId} (chainId ${expectedChainId}).`
-    );
+    showBanner("warn", "Wrong network. Switch your wallet to Ethereum to continue.");
   }
 }
 
@@ -340,12 +347,13 @@ async function refreshAll() {
 // So the claim UI must gate on the time window too, not on phase() alone, or it
 // will keep offering claims that revert.
 async function refreshPhaseAndSupply() {
-  const [phase, sealed, revealed, receiptsLen, maxSupply, deployedAt, phase1Duration, nextResolve, block] =
+  const [phase, sealed, revealed, receiptsLen, phase2Slots, maxSupply, deployedAt, phase1Duration, nextResolve, block] =
     await Promise.all([
       reader.read.phase(),
       reader.read.isSealed(),
       reader.read.revealed(),
       reader.read.receiptsLength(),
+      reader.read.phase2RemainingSlots(),
       reader.read.MAX_SUPPLY(),
       reader.read.deployedAt(),
       reader.read.PHASE_1_DURATION(),
@@ -363,12 +371,12 @@ async function refreshPhaseAndSupply() {
   const phase1ClosedByTime = currentPhase === 0 && !phase1WindowOpen;
 
   let label;
-  if (claimOpen) label = "Phase 1: claims open";
-  else if (phase1ClosedByTime) label = "Phase 1 closed — Phase 2 opens once closePhase1 is called";
-  else if (currentPhase === 1 && !sealed) label = "Phase 2: mint open";
-  else if (currentPhase === 1 && sealed) label = "Reveal pending — entropy gathering";
-  else if (revealed && nextResolve < receiptsLen) label = "Phase 3: reveal in progress";
-  else label = "Reveal complete";
+  if (claimOpen) label = "Phase I: claims open";
+  else if (phase1ClosedByTime) label = "Phase I closed. Phase II opens once the close transaction is submitted.";
+  else if (currentPhase === 1 && !sealed) label = "Phase II: mint open";
+  else if (currentPhase === 1 && sealed) label = "Reveal pending";
+  else if (revealed && nextResolve < receiptsLen) label = "Resolving";
+  else label = "Revealed";
   $("phase-label").textContent = label;
 
   // Page subtitle: terse UX-phase label under the wordmark, derived from the same
@@ -376,21 +384,24 @@ async function refreshPhaseAndSupply() {
   // resolving, and resolved states come from isSealed, revealed, and
   // nextResolveIndex vs receiptsLength, not from distinct phase() values.
   let subtitle;
-  if (claimOpen) subtitle = "Phase 1 · Claim";
-  else if (phase1ClosedByTime) subtitle = "Phase 1 · Closed";
-  else if (currentPhase === 1 && !sealed) subtitle = "Phase 2 · Mint";
+  if (claimOpen) subtitle = "Phase I · Claim";
+  else if (phase1ClosedByTime) subtitle = "Phase I · Closed";
+  else if (currentPhase === 1 && !sealed) subtitle = "Phase II · Mint";
   else if (currentPhase === 1 && sealed) subtitle = "Reveal pending";
   else if (revealed && nextResolve < receiptsLen) subtitle = "Phase 3 · Reveal";
   else subtitle = "Revealed";
   $("page-subtitle").textContent = subtitle;
+  document.title = `Abnormies — ${subtitle}`;
 
-  // Remaining supply framed as a countdown: total cap minus receipts created
-  // so far (claims in Phase 1; claims + mints + airdrops once Phase 2 opens).
-  const remaining = maxSupply - receiptsLen;
-  $("progress-counter").textContent = `${remaining.toString()} of ${maxSupply.toString()} remaining`;
+  // Minted count: MAX_SUPPLY minus the contract's authoritative Phase 2 slot
+  // count, so admin reserves and any non-mint receipts don't skew the total.
+  const minted = maxSupply - phase2Slots;
+  $("progress-counter").textContent = `${minted.toString()} / ${maxSupply.toString()} minted`;
 
   $("claim-section").hidden = !claimOpen;
   $("mint-section").hidden = !(currentPhase === 1 && !sealed);
+  // Persistent reveal-model note: visible during the gated phases (claim + mint), hidden after reveal.
+  $("reveal-note").hidden = !(currentPhase === 0 || currentPhase === 1);
 
   // Phase 3: reveal is live once revealed() is true; "in progress" until the
   // monotonic cursor (nextResolveIndex) reaches receiptsLength, then "complete".
@@ -573,7 +584,7 @@ function renderMint() {
   if (mintMax() < 1) {
     form.hidden = true;
     empty.hidden = false;
-    empty.textContent = "Phase 2 sold out. Awaiting reveal.";
+    empty.textContent = "Phase II sold out. Awaiting reveal.";
     return;
   }
   empty.hidden = true;
@@ -605,7 +616,7 @@ async function onMintClick() {
     return;
   }
   if (currentPhase !== 1) {
-    showBanner("warn", "Minting is only open in Phase 2.");
+    showBanner("warn", "Minting is only open in Phase II.");
     return;
   }
   if (walletChainId != null && walletChainId !== expectedChainId) {
@@ -621,7 +632,7 @@ async function onMintClick() {
     return;
   }
   if (maxNow < 1) {
-    showBanner("warn", "Phase 2 sold out. Awaiting reveal.");
+    showBanner("warn", "Phase II sold out. Awaiting reveal.");
     return;
   }
 
@@ -640,7 +651,7 @@ async function onMintClick() {
       remaining = maxNow;
     }
     if (remaining < 1) {
-      showBanner("warn", "Phase 2 sold out. Awaiting reveal.");
+      showBanner("warn", "Phase II sold out. Awaiting reveal.");
       await refreshPhaseAndSupply();
       return;
     }
@@ -664,7 +675,10 @@ async function onMintClick() {
 
     // 5. Success: report the actual count minted, then refresh state + receipts.
     mintInFlight = false; // let the post-mint refresh render an accurate button
-    showBanner("ok", `Minted ${count} ${count === 1 ? "Abnormie" : "Abnormies"} for ${formatEther(value)} ETH.`);
+    showBanner(
+      "ok",
+      "Mint confirmed. Your Abnormies will appear in your wallet and on OpenSea after the Phase III reveal. Nothing else to do until then."
+    );
     await refreshPhaseAndSupply();
     if (account) await loadReceipts();
   } catch (err) {
@@ -874,23 +888,36 @@ async function loadEligible() {
   btn.hidden = true;
 
   if (!claimOpen) {
-    list.innerHTML = "";
+    list.replaceChildren();
     empty.hidden = true;
     eligibleShard = null;
     return;
   }
   if (vaultInvalid) {
     // Malformed vault address; onVaultInput already surfaced the inline error.
-    list.innerHTML = "";
+    list.replaceChildren();
     empty.hidden = true;
     eligibleShard = null;
     return;
   }
   if (!account) {
-    list.innerHTML = "";
+    list.replaceChildren();
     eligibleShard = null;
     empty.hidden = false;
     empty.textContent = "Connect a wallet to see your eligible Normies.";
+    return;
+  }
+
+  // Chain gate: don't fetch a shard while the wallet is on the wrong network.
+  // Claiming requires the expected chain (same condition used for the claim/mint
+  // buttons), and fetching off-chain only yields confusing state. renderWalletBar()
+  // already shows the wrong-network warn banner, so set only the eligibility empty
+  // state here.
+  if (account && walletChainId != null && walletChainId !== expectedChainId) {
+    list.replaceChildren();
+    eligibleShard = null;
+    empty.hidden = false;
+    empty.textContent = `Switch your wallet to ${CHAIN_NAMES[expectedChainId] || expectedChainId} to check eligibility.`;
     return;
   }
 
@@ -900,23 +927,43 @@ async function loadEligible() {
     ? "No eligible Normies for that address."
     : "Your wallet was not a Normies holder at the snapshot block.";
 
-  list.innerHTML = "<div class='loading'>Loading eligible Normies…</div>";
+  const loading = document.createElement("div");
+  loading.className = "loading";
+  loading.textContent = "Loading eligible Normies…";
+  list.replaceChildren(loading);
   empty.hidden = true;
 
+  // Resolve the shard. The proofs host returns an HTML page (status 200) for a
+  // missing shard, so a 404-only check would let that HTML reach the JSON parser
+  // and throw. Read the body and parse defensively: a 404 or any non-JSON body
+  // means "no shard for this address" (the not-a-holder empty state), not an error.
+  // Only genuine failures (network error, or a non-OK status other than 404) raise
+  // the red error banner.
   let shard = null;
   try {
     const res = await fetch(`./proofs/owner/${target.toLowerCase()}.json`);
-    if (res.status === 404) {
-      list.innerHTML = "";
+    if (!res.ok && res.status !== 404) throw new Error(`HTTP ${res.status}`);
+
+    let parsed = null;
+    if (res.status !== 404) {
+      const body = await res.text();
+      try {
+        parsed = JSON.parse(body);
+      } catch {
+        parsed = null; // HTML / non-JSON body: treated as a missing shard below.
+      }
+    }
+
+    if (res.status === 404 || parsed === null) {
+      list.replaceChildren();
       eligibleShard = null;
       empty.hidden = false;
       empty.textContent = notHolderMsg;
       return;
     }
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    shard = await res.json();
+    shard = parsed;
   } catch (err) {
-    list.innerHTML = "";
+    list.replaceChildren();
     eligibleShard = null;
     empty.hidden = true;
     showBanner("error", `Could not load eligibility. ${describeError(err)} Retry with Refresh.`);
@@ -924,7 +971,7 @@ async function loadEligible() {
   }
 
   if (!Array.isArray(shard) || shard.length === 0) {
-    list.innerHTML = "";
+    list.replaceChildren();
     eligibleShard = null;
     empty.hidden = false;
     empty.textContent = notHolderMsg;
@@ -934,14 +981,19 @@ async function loadEligible() {
   eligibleShard = shard;
   const claimedFlags = await readClaimedFlags(shard);
 
-  list.innerHTML = "";
+  list.replaceChildren();
   let unclaimed = 0;
   shard.forEach((s, i) => {
     if (!claimedFlags[i]) unclaimed++;
     const row = document.createElement("div");
     row.className = "claim-row";
-    row.innerHTML = `<span class="normie-id">Normie #${s.normieId}</span>
-      <span class="badge">${s.customizedAtSnapshot ? "Customized" : "Uncustomized"}</span>`;
+    const idSpan = document.createElement("span");
+    idSpan.className = "normie-id";
+    idSpan.textContent = `Normie #${s.normieId}`;
+    const typeSpan = document.createElement("span");
+    typeSpan.className = "badge";
+    typeSpan.textContent = s.customizedAtSnapshot ? "Customized" : "Uncustomized";
+    row.append(idSpan, typeSpan);
     if (claimedFlags[i]) {
       const badge = document.createElement("span");
       badge.className = "badge badge-claimed";
@@ -968,7 +1020,54 @@ async function loadEligible() {
   }
 }
 
-// Bulk claim: every unclaimed eligible Normie in a single tx. No per-Normie buttons.
+// delegate.xyz pre-check: can `to` claim on behalf of `from` for this contract
+// (rights == 0)? Read-only, via the public client.
+async function isDelegatedForClaim(to, from) {
+  return publicClient.readContract({
+    address: DELEGATE_REGISTRY,
+    abi: DELEGATE_REGISTRY_ABI,
+    functionName: "checkDelegateForContract",
+    args: [to, from, contractAddress, ZERO_BYTES32]
+  });
+}
+
+// Walk a viem error chain for the first decoded custom error (name + args).
+function decodeContractError(err) {
+  let e = err;
+  while (e) {
+    if (e.data?.errorName) return { name: e.data.errorName, args: e.data.args || [] };
+    e = e.cause;
+  }
+  return null;
+}
+
+// Friendly text for a decoded claim revert. Known errors get tailored copy; any
+// other revert (including a failed on-chain delegation check) is surfaced verbatim
+// (decoded name + args) behind a generic prefix.
+function describeClaimRevert(err) {
+  const decoded = decodeContractError(err);
+  if (!decoded) return describeError(err);
+  if (decoded.name === "AlreadyClaimed") {
+    const id = decoded.args?.[0] != null ? decoded.args[0].toString() : "?";
+    return `Normie #${id} was already claimed. Refresh and try again.`;
+  }
+  if (decoded.name === "LengthMismatch") {
+    return "Claim data was inconsistent. Refresh the page and try again.";
+  }
+  const parts = (decoded.args || []).map((a) => (typeof a === "bigint" ? a.toString() : String(a)));
+  return `Reverted: ${decoded.name}${parts.length ? `(${parts.join(", ")})` : ""}.`;
+}
+
+// How many Normies go in a single claim() tx. Bounds calldata (~13 proof hashes
+// per entry) and per-tx gas so the public-RPC simulate/estimate and the wallet
+// signature stay well inside provider limits.
+const CLAIM_BATCH_SIZE = 50;
+
+// Bulk claim, chunked. Every unclaimed eligible Normie is claimed across one or
+// more 50-entry claim() txs. Each batch is pre-flighted through the public client
+// (simulate + gas estimate) BEFORE the wallet is opened, so a doomed claim never
+// reaches signing, and the gas limit is fixed (the wallet's own estimator is out
+// of the path). A re-run resumes: already-claimed ids are filtered out first.
 async function onClaimAll() {
   const btn = $("claim-btn");
   if (!walletClient || !account) {
@@ -976,7 +1075,7 @@ async function onClaimAll() {
     return;
   }
   if (!claimOpen) {
-    showBanner("warn", "Claiming is only open during the Phase 1 window.");
+    showBanner("warn", "Claiming is only open during the Phase I window.");
     return;
   }
   if (walletChainId != null && walletChainId !== expectedChainId) {
@@ -995,48 +1094,151 @@ async function onClaimAll() {
   $("refresh-btn").disabled = true;
   btn.textContent = "Checking…";
 
+  // Restore the button to a retryable state on any abort. The success path lets
+  // loadEligible() re-render it instead.
+  const abort = (kind, msg) => {
+    showBanner(kind, msg);
+    btn.textContent = originalLabel;
+    btn.disabled = false;
+  };
+
+  // vault: a real zero-address param for direct claims, the vault for delegated claims.
+  const vaultArg = claimVault ?? zeroAddress;
+
   try {
-    // 1. Re-read claimed() immediately before the call; filter to unclaimed.
+    // Delegation pre-check: for a delegated claim, confirm this wallet is actually
+    // delegated by the vault before doing anything else. Gives a precise message and
+    // skips even the simulate round-trip for the common misconfiguration.
+    if (vaultArg !== zeroAddress) {
+      let delegated;
+      try {
+        delegated = await isDelegatedForClaim(account, vaultArg);
+      } catch (e) {
+        // Registry read failed: don't hard-block; the per-batch simulate is the backstop.
+        console.warn("checkDelegateForContract read failed; relying on simulate backstop:", e);
+        delegated = true;
+      }
+      if (!delegated) {
+        abort(
+          "error",
+          `This wallet is not delegated to claim for ${short(vaultArg)}. Claim directly from the holding wallet, or set up delegation at delegate.xyz.`
+        );
+        return;
+      }
+    }
+
+    // Re-read claimed() via the public client and keep only still-unclaimed entries,
+    // so a re-run naturally resumes where a previous run stopped.
     const claimedFlags = await readClaimedFlags(eligibleShard);
     const unclaimed = eligibleShard.filter((_, i) => !claimedFlags[i]);
-
-    // 2. Race: everything was claimed since the last refresh.
     if (unclaimed.length === 0) {
       showBanner("warn", "Already claimed.");
       await loadEligible();
       return;
     }
 
-    // 3. Parallel-indexed arrays. Proof hex strings pass through to viem as-is.
-    const normieIds = unclaimed.map((s) => BigInt(s.normieId));
-    const customizedFlags = unclaimed.map((s) => Boolean(s.customizedAtSnapshot));
-    const proofs = unclaimed.map((s) => s.proof);
-    // vault: a real zero-address param for direct claims, the vault for delegated claims.
-    const vaultArg = claimVault ?? zeroAddress;
+    // Split into fixed-size batches.
+    const batches = [];
+    for (let i = 0; i < unclaimed.length; i += CLAIM_BATCH_SIZE) {
+      batches.push(unclaimed.slice(i, i + CLAIM_BATCH_SIZE));
+    }
+    const total = unclaimed.length;
+    const N = batches.length;
+    let claimedSoFar = 0;
 
-    // 4. One tx for the whole batch (whales included; ~8k gas per Normie).
-    btn.textContent = "Confirm in wallet…";
-    const hash = await walletClient.writeContract({
-      address: contractAddress,
-      abi,
-      functionName: "claim",
-      args: [normieIds, customizedFlags, proofs, vaultArg],
-      account
-    });
-    btn.textContent = "Waiting for confirmation…";
-    await publicClient.waitForTransactionReceipt({ hash });
+    for (let b = 0; b < N; b++) {
+      const batch = batches[b];
+      const ids = batch.map((s) => BigInt(s.normieId));
+      const flags = batch.map((s) => Boolean(s.customizedAtSnapshot));
+      const proofs = batch.map((s) => s.proof);
+      const args = [ids, flags, proofs, vaultArg];
+      const firstId = batch[0].normieId;
+      const lastId = batch[batch.length - 1].normieId;
+      const human = `batch ${b + 1} of ${N} (ids ${firstId}-${lastId})`;
 
-    // 5. Success: refresh phase state, receipts, and per-Normie claimed status.
-    claimInFlight = false; // let the post-claim refresh render an accurate button
-    const noun = unclaimed.length === 1 ? "Abnormie" : "Abnormies";
+      // Pre-flight (a): simulate against the public client. A revert aborts the whole
+      // run before any wallet interaction; later batches are not attempted.
+      btn.textContent = `Checking ${human}…`;
+      try {
+        await publicClient.simulateContract({
+          address: contractAddress,
+          abi,
+          functionName: "claim",
+          args,
+          account
+        });
+      } catch (err) {
+        abort(
+          "error",
+          `Claim stopped at ${human}. ${describeClaimRevert(err)}` +
+            (claimedSoFar ? ` (${claimedSoFar} of ${total} already claimed in this run; re-run to resume.)` : "")
+        );
+        return;
+      }
+
+      // Pre-flight (b): gas estimate against the public client; pass an explicit limit
+      // with a 20% buffer so the wallet only signs (its estimator is out of the path).
+      let gas;
+      try {
+        const est = await publicClient.estimateContractGas({
+          address: contractAddress,
+          abi,
+          functionName: "claim",
+          args,
+          account
+        });
+        gas = (est * 120n) / 100n;
+      } catch (err) {
+        abort("error", `Could not estimate gas for ${human}. ${describeClaimRevert(err)}`);
+        return;
+      }
+
+      // Submit this batch. Per-batch wallet confirmation; gas is fixed from above.
+      btn.textContent = `Confirm ${human} in wallet…`;
+      let hash;
+      try {
+        hash = await walletClient.writeContract({
+          address: contractAddress,
+          abi,
+          functionName: "claim",
+          args,
+          account,
+          gas
+        });
+      } catch (err) {
+        // Wallet rejection / error mid-run: completed batches stay claimed; a re-run resumes.
+        if (claimedSoFar > 0) {
+          abort(
+            "warn",
+            `Stopped after ${claimedSoFar} of ${total} claimed. ${describeError(err)} Re-run to claim the rest.`
+          );
+        } else if (claimVault && isInvalidDelegation(err)) {
+          abort(
+            "error",
+            `Your wallet is not delegated by ${short(claimVault)} on delegate.xyz. Set up the delegation at https://delegate.xyz before claiming.`
+          );
+        } else {
+          abort("error", `Claim failed. ${describeError(err)}`);
+        }
+        return;
+      }
+
+      btn.textContent = `Confirming ${human}…`;
+      await publicClient.waitForTransactionReceipt({ hash });
+      claimedSoFar += batch.length;
+    }
+
+    // Success: refresh phase state, receipts, and per-Normie claimed status. Setting
+    // claimInFlight false first lets loadEligible() render an accurate button.
+    claimInFlight = false;
     showBanner(
       "ok",
-      claimVault ? `Claimed ${unclaimed.length} ${noun} for ${short(claimVault)}.` : `Claimed ${unclaimed.length} ${noun}.`
+      "Claim confirmed. Your Abnormies will appear in your wallet and on OpenSea after the Phase III reveal. Nothing else to do until then."
     );
     await refreshPhaseAndSupply();
     await Promise.allSettled([loadEligible(), loadReceipts()]);
   } catch (err) {
-    // 6. Failure: surface the reason and re-enable the button.
+    // Unexpected failure outside the per-batch handling.
     if (claimVault && isInvalidDelegation(err)) {
       showBanner(
         "error",

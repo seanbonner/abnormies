@@ -11,7 +11,7 @@ Live: https://abnormies.art
 - `spec.md` — specification (machine-readable, source of truth)
 - `_headers` — Cloudflare Pages headers configuration
 
-Smart contracts and minting UI will live in separate repositories. Forthcoming.
+Smart contracts and minting UI live in separate repositories.
 
 ## License
 
