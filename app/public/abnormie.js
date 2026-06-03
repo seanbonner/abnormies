@@ -2,10 +2,11 @@
 //
 // Renders a single revealed Abnormie (?id={n}) alongside its seed Normie.
 // Read paths are fully wired against the deployed Abnormies contract (state,
-// metadata, ownership) plus the Normies contract (image + owner) and the
-// Normies API (agent binding). The one wired write is Refresh -> pokeSeed,
-// which is permissionless and non-destructive. Thunder, Lightning, Update
-// Awakening, and Download GIF are gated/rendered but stubbed ("Coming soon")
+// metadata, ownership) plus the Normies contract (image + owner), the Normies
+// canvas storage (customization), and the Normies API (agent binding). The
+// "Update from Normies" action pre-checks state and fires pokeSeed and/or
+// pokeAwakening only when each would actually change state on-chain — never
+// a no-op write. Thunder, Lightning, and Download GIF remain "Coming soon"
 // pending the next prompt. Function names are taken from the deployed ABI.
 //
 // The pure parsing helpers (decodeDataUri/parseTokenURI/extractSvgMarkup/
@@ -102,12 +103,26 @@ function bootstrap() {
       '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" preserveAspectRatio="none"><rect width="40" height="40" fill="#e3e5e4"/></svg>'
     );
 
+  // Minimal ABI for the Normies canvas storage contract — only the read we need
+  // for pre-checking whether a seed Normie has been customized since last poke.
+  const CANVAS_STORAGE_ABI = [
+    {
+      type: "function",
+      name: "isTransformed",
+      inputs: [{ name: "tokenId", type: "uint256" }],
+      outputs: [{ type: "bool" }],
+      stateMutability: "view"
+    }
+  ];
+  const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+
   let abi = null;
   let normiesAbi = null;
   let publicClient = null;
   let reader = null;
   let normiesReader = null;
   let normiesAddress = null;
+  let canvasStorageReader = null;
 
   let walletClient = null;
   let account = null;
@@ -117,7 +132,7 @@ function bootstrap() {
   let currentId = null; // BigInt
   let currentSeedId = null; // BigInt
   let currentImageField = null; // data URI for SVG download
-  let refreshInFlight = false;
+  let updateInFlight = false;
 
   const $ = (id) => document.getElementById(id);
 
@@ -296,7 +311,7 @@ function bootstrap() {
 
     renderChips({ isStatic, chipDead, chipCustomized, aligned });
     renderSeedPanel({ seedId, ownerNormie, customized: seed.customized, awakened, agentId, normieImg });
-    renderActions({ seedDead: seed.burned, seedCustomized: seed.customized, isActive: !isStatic, ownsAbnormie, awakened, apiBinding });
+    renderActions({ seedDead: seed.burned, seedCustomized: seed.customized, isActive: !isStatic, ownsAbnormie });
     renderTraits(metadata.attributes || []);
 
     $("error-state").hidden = true;
@@ -372,12 +387,14 @@ function bootstrap() {
     $("seed-info").replaceChildren(...nodes);
   }
 
-  function renderActions({ seedDead, seedCustomized, isActive, ownsAbnormie, awakened, apiBinding }) {
+  function renderActions({ seedDead, seedCustomized, isActive, ownsAbnormie }) {
     const comingSoon = () => alert("Coming soon");
     // Thunder/Lightning require the Abnormie to be Active: Static Abnormies are
     // frozen and cannot be burned (staticAt == 0 -> isActive).
+    // "Update from Normies" covers BOTH pokeSeed and pokeAwakening — it
+    // pre-checks state and fires only the writes that actually do something.
     const defs = [
-      { label: "Refresh", visible: true, onClick: onRefresh },
+      { label: "Update from Normies", visible: true, onClick: onUpdateFromNormies },
       { label: "Refresh OS", visible: true, onClick: onRefreshOS },
       { label: "Download SVG", visible: true, onClick: onDownloadSvg },
       { label: "Download GIF", visible: true, onClick: comingSoon },
@@ -387,8 +404,7 @@ function bootstrap() {
         visible: ownsAbnormie && !seedDead && seedCustomized && isActive,
         danger: true,
         onClick: comingSoon
-      },
-      { label: "Update Awakening", visible: !awakened && apiBinding, onClick: comingSoon }
+      }
     ];
 
     const nodes = [];
@@ -466,8 +482,20 @@ function bootstrap() {
   }
 
   // -- actions -------------------------------------------------------------
-  // Refresh: wired, real. pokeSeed is permissionless and gas-only.
-  async function onRefresh(ev) {
+  // "Update from Normies" — pre-checks state and fires only the writes that
+  // would actually change something on-chain.
+  //
+  // pokeSeed (Abnormies.sol:551) writes when any of these hold (per _pokeSeed at
+  // line 579):
+  //   - Normies.ownerOf(normieId) reverts/returns zero AND !seedBurned    → mark burned
+  //   - lastObservedSeedOwner == 0x0 (first observation)                  → set it
+  //   - currentOwner != lastObservedSeedOwner                             → cirrus++ + update
+  //   - NormiesCanvasStorage.isTransformed(normieId) && !seedCustomized   → set it
+  //
+  // pokeAwakening (line 565) is one-way: it reverts AlreadyAwakened() if
+  // seedAwakened is already true. So we only consider it needed when there's a
+  // non-zero agentId from the Normies API AND seedAwakened is false.
+  async function onUpdateFromNormies(ev) {
     const btn = ev.currentTarget;
     if (!account) {
       await connect();
@@ -476,34 +504,92 @@ function bootstrap() {
     if (walletChainId != null && walletChainId !== expectedChainId) {
       showBanner(
         "warn",
-        `Switch your wallet to ${CHAIN_NAMES[expectedChainId] || expectedChainId} (chainId ${expectedChainId}) to refresh.`
+        `Switch your wallet to ${CHAIN_NAMES[expectedChainId] || expectedChainId} (chainId ${expectedChainId}) to update.`
       );
       return;
     }
-    if (refreshInFlight || currentSeedId == null) return;
+    if (updateInFlight || currentSeedId == null) return;
 
     const original = btn.textContent;
-    refreshInFlight = true;
+    const seedId = currentSeedId;
+    updateInFlight = true;
     btn.disabled = true;
-    btn.textContent = "Confirm in wallet…";
+    btn.textContent = "Checking…";
+
     try {
-      const hash = await walletClient.writeContract({
-        address: contractAddress,
-        abi,
-        functionName: "pokeSeed",
-        args: [currentSeedId],
-        account
-      });
-      btn.textContent = "Waiting…";
-      await publicClient.waitForTransactionReceipt({ hash });
-      showBanner("ok", `Refreshed Normie #${currentSeedId} state on-chain.`);
+      // Free pre-flight reads (parallel). All can fail individually; we map
+      // failures to the relevant decision input rather than aborting.
+      const [ownerRes, transformedRes, seedState, binding] = await Promise.all([
+        normiesReader.read.ownerOf([seedId]).catch(() => null),
+        canvasStorageReader.read.isTransformed([seedId]).catch(() => null),
+        reader.read.getSeedState([seedId]),
+        fetchBinding(seedId)
+      ]);
+
+      const currentOwner = ownerRes; // address string, or null if ownerOf reverted
+      const isTransformed = transformedRes === true; // null/false both treated as "not yet customized"
+      const lastObserved = seedState[0]; // address — ZERO if never observed
+      const seedCustomized = Boolean(seedState[2]);
+      const seedBurned = Boolean(seedState[3]);
+      const seedAwakened = Boolean(seedState[4]);
+      const apiAgentId =
+        binding && binding.agent_id != null ? BigInt(binding.agent_id) : 0n;
+
+      // pokeSeed-needed branches
+      const firstObservation =
+        currentOwner != null && lastObserved === ZERO_ADDRESS;
+      const ownerChanged =
+        currentOwner != null &&
+        lastObserved !== ZERO_ADDRESS &&
+        getAddress(currentOwner) !== getAddress(lastObserved);
+      const needsBurnedMark =
+        (currentOwner == null || currentOwner === ZERO_ADDRESS) && !seedBurned;
+      const needsCustomizedMark = isTransformed && !seedCustomized;
+      const needsSeedPoke =
+        firstObservation || ownerChanged || needsBurnedMark || needsCustomizedMark;
+
+      // pokeAwakening-needed: only when not yet awakened AND the API surfaces a
+      // non-zero agent binding. (Contract reverts AlreadyAwakened if we try
+      // again on a seed that's already awakened, so we never re-poke.)
+      const needsAwakeningPoke = apiAgentId !== 0n && !seedAwakened;
+
+      if (!needsSeedPoke && !needsAwakeningPoke) {
+        showBanner("ok", "Already in sync with Normies.");
+        return;
+      }
+
+      if (needsSeedPoke) {
+        btn.textContent = "Updating from Normies…";
+        const hash = await walletClient.writeContract({
+          address: contractAddress,
+          abi,
+          functionName: "pokeSeed",
+          args: [seedId],
+          account
+        });
+        await publicClient.waitForTransactionReceipt({ hash });
+      }
+
+      if (needsAwakeningPoke) {
+        btn.textContent = "Syncing awakening…";
+        const hash = await walletClient.writeContract({
+          address: contractAddress,
+          abi,
+          functionName: "pokeAwakening",
+          args: [seedId, apiAgentId],
+          account
+        });
+        await publicClient.waitForTransactionReceipt({ hash });
+      }
+
+      showBanner("ok", "Update complete.");
       await loadAbnormie(currentId);
     } catch (err) {
-      showBanner("error", `Refresh failed. ${describeError(err)}`);
+      showBanner("error", `Update failed: ${describeError(err)}`);
+    } finally {
+      updateInFlight = false;
       btn.textContent = original;
       btn.disabled = false;
-    } finally {
-      refreshInFlight = false;
     }
   }
 
@@ -569,6 +655,12 @@ function bootstrap() {
     try {
       normiesAddress = getAddress(await reader.read.NORMIES());
       normiesReader = getContract({ address: normiesAddress, abi: normiesAbi, client: publicClient });
+      const canvasStorageAddress = getAddress(await reader.read.NORMIES_CANVAS_STORAGE());
+      canvasStorageReader = getContract({
+        address: canvasStorageAddress,
+        abi: CANVAS_STORAGE_ABI,
+        client: publicClient
+      });
     } catch (err) {
       showError(`Failed to resolve the Normies contract address. ${describeError(err)}`);
       return;
