@@ -418,7 +418,7 @@ async function refreshPhaseAndSupply() {
   if (revealInProgress || revealComplete) {
     revealNextResolve = nextResolve;
     revealReceiptsLen = receiptsLen;
-    $("reveal-progress").textContent = `${nextResolve.toString()} of ${receiptsLen.toString()} revealed`;
+    $("reveal-progress").textContent = `${(receiptsLen - nextResolve).toString()} still unrevealed`;
     $("reveal-controls").hidden = revealComplete;
     $("reveal-complete").hidden = !revealComplete;
     if (!revealComplete) updateRevealSlider();
@@ -539,7 +539,7 @@ async function onRevealClick() {
     } else {
       showBanner(
         "ok",
-        `Revealed ${did.toString()} Abnormies (you helped reveal positions ${(startIdx + 1n).toString()} to ${endIdx.toString()} in the queue).`
+        `Revealed ${did.toString()} Abnormies.`
       );
     }
     await refreshAll();
