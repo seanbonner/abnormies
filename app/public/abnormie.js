@@ -297,8 +297,8 @@ function bootstrap() {
       !!ownerNormie &&
       !!ownerAbnormie &&
       ownerNormie.toLowerCase() === ownerAbnormie.toLowerCase();
-    const agentId = binding?.agent_id != null ? binding.agent_id : awakened ? seed.boundAgent : null;
-    const apiBinding = binding != null && binding.agent_id != null;
+    const agentId = binding?.agentId != null ? binding.agentId : awakened ? seed.boundAgent : null;
+    const apiBinding = binding != null && binding.agentId != null;
 
     currentImageField = metadata.image || null;
 
@@ -318,12 +318,25 @@ function bootstrap() {
     $("content").hidden = false;
   }
 
+  // api.normies.art shape (as of 2026-06-03):
+  //   { "binding": { "agentId": "32512", "tokenId": "994", ... } }
+  // agentId is a NESTED, CAMEL-CASE, STRING field. Earlier readers looked for a
+  // top-level snake-case `agent_id`, which silently always evaluated to null,
+  // making `apiAgentId` always 0n and `needsAwakeningPoke` always false even
+  // for seeds that ARE bound upstream. Normalised return shape: { agentId: BigInt }
+  // or null. Callers use only `binding.agentId` from this point forward.
   async function fetchBinding(seedId) {
     try {
       const res = await fetch(`https://api.normies.art/agents/binding/${seedId}`);
       if (!res.ok) return null;
       const j = await res.json();
-      return j && typeof j === "object" ? j : null;
+      const raw = j && typeof j === "object" ? j.binding?.agentId : null;
+      if (raw == null || raw === "") return null;
+      try {
+        return { agentId: BigInt(raw) };
+      } catch {
+        return null;
+      }
     } catch {
       return null; // network/CORS failure -> treat as no binding
     }
@@ -532,8 +545,7 @@ function bootstrap() {
       const seedCustomized = Boolean(seedState[2]);
       const seedBurned = Boolean(seedState[3]);
       const seedAwakened = Boolean(seedState[4]);
-      const apiAgentId =
-        binding && binding.agent_id != null ? BigInt(binding.agent_id) : 0n;
+      const apiAgentId = binding && binding.agentId != null ? binding.agentId : 0n;
 
       // pokeSeed-needed branches
       const firstObservation =
