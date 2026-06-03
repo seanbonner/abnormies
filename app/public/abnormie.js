@@ -432,6 +432,42 @@ function bootstrap() {
     $("actions").replaceChildren(...nodes);
   }
 
+  // Display-only relabel layer for the on-chain trait names. The renderer
+  // contract is immutable so the strings in tokenURI / OpenSea metadata can't
+  // change — this map gives the site a cleaner, more consistent vocabulary
+  // without touching the contract. Order array drives the render order; any
+  // on-chain trait not in the order is appended at the end (defensive in case
+  // the renderer ever ships a new trait we haven't mapped yet).
+  const TRAIT_LABELS = {
+    "Mutability": "State",
+    "Source Life": "Seed Life",
+    "Source Customized": "Seed Customized",
+    "Source Awakened": "Seed Awakened",
+    "Inverted": "Aligned",
+    "Cirrus Events": "Cirrus",
+    "Thunder Events Received": "Thunder",
+    "Lightning Events Received": "Lightning",
+    "Visible Cirrus": "Cirrus Coverage",
+    "Visible Altocumulus": "Altocumulus Coverage",
+    "Visible Nimbostratus": "Nimbostratus Coverage"
+    // "Total Coverage" and "Seed Normie" unchanged — omitted from this map.
+  };
+  const TRAIT_ORDER = [
+    "Seed Normie",
+    "Mutability",
+    "Source Life",
+    "Source Customized",
+    "Source Awakened",
+    "Inverted",
+    "Cirrus Events",
+    "Thunder Events Received",
+    "Lightning Events Received",
+    "Visible Cirrus",
+    "Visible Altocumulus",
+    "Visible Nimbostratus",
+    "Total Coverage"
+  ];
+
   function renderTraits(attributes) {
     if (!Array.isArray(attributes) || attributes.length === 0) {
       const empty = document.createElement("div");
@@ -440,8 +476,35 @@ function bootstrap() {
       $("traits").replaceChildren(empty);
       return;
     }
-    const nodes = attributes.map((attr) => {
-      const label = attr.trait_type ?? attr.traitType ?? "—";
+
+    // Index attributes by their on-chain key so we can pick them in our own order.
+    const byKey = new Map();
+    for (const attr of attributes) {
+      const key = attr.trait_type ?? attr.traitType ?? "";
+      if (key) byKey.set(key, attr);
+    }
+
+    const ordered = [];
+    const consumed = new Set();
+    for (const key of TRAIT_ORDER) {
+      const attr = byKey.get(key);
+      if (!attr) continue;
+      // Seed Awakened renders only when the value is "Yes" (no row at all for "No").
+      if (key === "Source Awakened" && String(attr.value) !== "Yes") {
+        consumed.add(key);
+        continue;
+      }
+      ordered.push(attr);
+      consumed.add(key);
+    }
+    // Defensive tail: any trait the renderer emits that we haven't mapped yet.
+    for (const [key, attr] of byKey) {
+      if (!consumed.has(key)) ordered.push(attr);
+    }
+
+    const nodes = ordered.map((attr) => {
+      const rawKey = attr.trait_type ?? attr.traitType ?? "—";
+      const label = TRAIT_LABELS[rawKey] ?? rawKey;
       const value = attr.value != null ? String(attr.value) : "—";
       const row = document.createElement("div");
       row.className = "trait-row";
