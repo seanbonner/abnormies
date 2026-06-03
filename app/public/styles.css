@@ -587,6 +587,16 @@ a.receipt-cell:hover .receipt-thumb { border-color: var(--accent); }
   background: var(--bg);
   border: 1px solid var(--border);
 }
+/* Outlined stand-in for the seed image slot when the seed Normie is burned and
+   its on-chain tokenURI (the only image source) reverts. Matches .detail-seed-img
+   dimensions; reuses the Thunder/destructive color (--error) for the outline. */
+.seed-burned-placeholder {
+  width: 80px;
+  height: 80px;
+  flex: none;
+  background: var(--bg);
+  border: 1px solid var(--error);
+}
 .detail-seed-info {
   display: grid;
   grid-template-columns: auto 1fr;

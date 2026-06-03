@@ -362,9 +362,21 @@ function bootstrap() {
 
   function renderSeedPanel({ seedId, ownerNormie, burned, customized, awakened, agentId, normieImg }) {
     const img = $("seed-img");
+    // Drop any placeholder left by a prior render (wallet/chain changes re-run load).
+    const prevPlaceholder = img.parentNode.querySelector(".seed-burned-placeholder");
+    if (prevPlaceholder) prevPlaceholder.remove();
     if (normieImg) {
       img.src = normieImg;
       img.hidden = false;
+    } else if (burned) {
+      // A burned seed's only image source (on-chain tokenURI) reverts, so there is
+      // nothing to load. Show an outlined stand-in box in the slot instead of an
+      // empty gap. When NOT burned, a missing image is some other failure we can't
+      // characterize, so we keep hiding it (below).
+      img.hidden = true;
+      const placeholder = document.createElement("div");
+      placeholder.className = "seed-burned-placeholder";
+      img.insertAdjacentElement("afterend", placeholder);
     } else {
       img.hidden = true;
     }
