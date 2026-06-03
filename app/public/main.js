@@ -399,6 +399,14 @@ async function refreshPhaseAndSupply() {
   const minted = maxSupply - phase2Slots;
   $("progress-counter").textContent = `${minted.toString()} / ${maxSupply.toString()} minted`;
 
+  // Once minted out, the supply counter and the wallet-bar Refresh button serve
+  // no purpose (nothing left to mint, nothing useful to refresh from this row).
+  // Hidden via the same `hidden` attribute pattern as the section visibility
+  // decisions below so the convention stays consistent.
+  const mintedOut = minted >= maxSupply;
+  $("progress-counter-wrap").hidden = mintedOut;
+  $("refresh-btn").hidden = mintedOut;
+
   $("claim-section").hidden = !claimOpen;
   $("mint-section").hidden = !(currentPhase === 1 && !sealed);
   // Persistent reveal-model note: visible during the gated phases (claim + mint), hidden after reveal.
