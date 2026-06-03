@@ -643,6 +643,19 @@ a.receipt-cell:hover .receipt-thumb { border-color: var(--accent); }
   gap: 10px;
 }
 .detail-actions .btn { width: 100%; text-align: center; }
+/* Full-width divider/title above the Thunder + Lightning buttons. Spans both grid
+   columns and is set off from the safe actions above by a top border. */
+.actions-destructive-header {
+  grid-column: 1 / -1;
+  margin-top: 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  font-weight: 700;
+  color: var(--error);
+}
 
 .detail-action-status {
   margin: 10px 0 0;
@@ -675,6 +688,13 @@ a.receipt-cell:hover .receipt-thumb { border-color: var(--accent); }
   margin: 0 0 10px;
   font-size: 12px;
   color: var(--muted);
+}
+/* Prominent first sentence of the picker note: bold, danger red, on its own line. */
+.freeze-picker-warning {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 700;
+  color: var(--error);
 }
 /* Flex + wrap, not a 3-track grid: in the narrow actions panel the auto-sized
    label and Validate button used to eat the row and collapse the 1fr input to a

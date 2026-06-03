@@ -444,8 +444,20 @@ function bootstrap() {
     ];
 
     const nodes = [];
+    // The destructive (Thunder/Lightning) buttons are always last in `defs`, so
+    // insert the header just before the first VISIBLE danger button. If the holder
+    // is eligible for neither, the header is never created — non-eligible holders
+    // see no section title for actions they can't take.
+    let destructiveHeaderAdded = false;
     for (const d of defs) {
       if (!d.visible) continue;
+      if (d.danger && !destructiveHeaderAdded) {
+        const header = document.createElement("div");
+        header.className = "actions-destructive-header";
+        header.textContent = "DESTRUCTIVE ACTIONS:";
+        nodes.push(header);
+        destructiveHeaderAdded = true;
+      }
       const btn = document.createElement("button");
       btn.className = `btn btn-sm${d.danger ? " btn-danger" : ""}`;
       btn.textContent = d.label;
@@ -491,8 +503,13 @@ function bootstrap() {
 
     const note = document.createElement("p");
     note.className = "freeze-picker-note";
-    note.textContent =
-      "Enter the Abnormie ID to freeze. It must exist, still be Active (not yet Static), and be owned by someone other than you.";
+    const warning = document.createElement("span");
+    warning.className = "freeze-picker-warning";
+    warning.textContent = "THIS ACTION WILL BURN YOUR ABNORMIE. THIS IS IRREVERSIBLE.";
+    note.append(
+      warning,
+      "To proceed, enter the Abnormie ID you want to freeze. It must exist, still be Active, and be owned by someone other than you."
+    );
 
     const row = document.createElement("div");
     row.className = "freeze-picker-row";
