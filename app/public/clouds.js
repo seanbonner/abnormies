@@ -1,7 +1,7 @@
-// Abnormies portfolio page — shows the connected wallet's holdings and
-// nothing else (no claim, mint, seal, or reveal UI). Reuses the same receipts-
-// loading shape as main.js but lives in its own file so this page stays
-// scoped to portfolio rendering.
+// Abnormies Clouds page — shows the connected wallet's holdings and nothing
+// else (no claim, mint, seal, or reveal UI). Reuses the same receipts-loading
+// shape as main.js but lives in its own file so this page stays scoped to
+// holdings rendering.
 
 import {
   createPublicClient,
@@ -136,7 +136,7 @@ async function init() {
 
 async function connect() {
   if (!window.ethereum) {
-    showBanner("error", "No injected wallet found. Install a browser wallet to view your portfolio.");
+    showBanner("error", "No injected wallet found. Install a browser wallet to view your Clouds.");
     return;
   }
   try {
@@ -201,7 +201,7 @@ async function refreshAll() {
 // ---------------------------------------------------------------------------
 // Receipts — scan all receipts for the connected wallet, render the grid.
 // Same logic as main.js loadReceipts but without the delegate-vault path
-// (portfolio is purely "what does THIS wallet hold").
+// (Clouds is purely "what does THIS wallet hold").
 // ---------------------------------------------------------------------------
 async function loadReceipts() {
   const section = $("receipts-section");

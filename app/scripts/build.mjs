@@ -72,7 +72,7 @@ await mkdir(resolve(appOut, "abi"), { recursive: true });
 await cp(publicDir, appOut, {
   recursive: true,
   filter: (src) =>
-    !src.endsWith("/main.js") && !src.endsWith("/abnormie.js") && !src.endsWith("/portfolio.js")
+    !src.endsWith("/main.js") && !src.endsWith("/abnormie.js") && !src.endsWith("/clouds.js")
 });
 
 // Slim the vendored Foundry artifact to just its ABI for the runtime fetch.
@@ -88,12 +88,12 @@ await writeFile(resolve(appOut, "config.js"), `window.ABNORMIES_CONFIG = ${JSON.
 // Bundle the entries: viem inlined, self-contained modules, no CDN at runtime.
 //   main.js      -> Phase 1/2/3 claim + mint + reveal app (mint.html)
 //   abnormie.js  -> post-reveal detail page (abnormie.html)
-//   portfolio.js -> portfolio page (portfolio.html)
+//   clouds.js    -> holdings page (clouds.html)
 await esbuild.build({
   entryPoints: [
     resolve(publicDir, "main.js"),
     resolve(publicDir, "abnormie.js"),
-    resolve(publicDir, "portfolio.js")
+    resolve(publicDir, "clouds.js")
   ],
   bundle: true,
   format: "esm",

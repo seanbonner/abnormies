@@ -720,8 +720,8 @@ function bootstrap() {
   async function init() {
     renderWallet();
     $("wallet-address").addEventListener("click", connect);
-    // Back link returns to the Portfolio page (sibling under /app/).
-    $("back-link").setAttribute("href", "./portfolio.html");
+    // Back link returns to the Clouds page (sibling under /app/).
+    $("back-link").setAttribute("href", "./clouds.html");
 
     if (!contractAddress || !/^0x[0-9a-fA-F]{40}$/.test(contractAddress)) {
       showError("No contract address configured. Set FRONTEND_CONTRACT_ADDRESS and rebuild.");
