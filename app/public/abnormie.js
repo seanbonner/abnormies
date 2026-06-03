@@ -502,10 +502,11 @@ function bootstrap() {
     const input = document.createElement("input");
     input.id = "freeze-target-input";
     input.type = "number";
-    input.min = "0";
-    input.max = "9999";
+    input.min = "1";
+    input.max = "10000";
     input.step = "1";
     input.inputMode = "numeric";
+    input.pattern = "[0-9]*";
     const validateBtn = document.createElement("button");
     validateBtn.id = "freeze-validate-btn";
     validateBtn.className = "btn btn-sm";

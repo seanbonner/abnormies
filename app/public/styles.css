@@ -676,9 +676,14 @@ a.receipt-cell:hover .receipt-thumb { border-color: var(--accent); }
   font-size: 12px;
   color: var(--muted);
 }
+/* Flex + wrap, not a 3-track grid: in the narrow actions panel the auto-sized
+   label and Validate button used to eat the row and collapse the 1fr input to a
+   few pixels. With flex-wrap the input keeps a real width (flex-basis 120px,
+   min-width 120px so it can't shrink below readable) and wraps to its own line
+   on narrow viewports instead of being crushed. */
 .freeze-picker-row {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
 }
@@ -688,6 +693,8 @@ a.receipt-cell:hover .receipt-thumb { border-color: var(--accent); }
   color: var(--muted);
 }
 .freeze-picker-row input {
+  flex: 1 1 120px;
+  min-width: 120px;
   font-family: ui-monospace, "SF Mono", Consolas, monospace;
   font-size: 13px;
   padding: 6px 8px;
@@ -695,7 +702,6 @@ a.receipt-cell:hover .receipt-thumb { border-color: var(--accent); }
   background: var(--bg);
   color: var(--text);
   border-radius: 4px;
-  min-width: 0;
 }
 .freeze-picker-controls {
   display: flex;
