@@ -194,6 +194,34 @@ function isInvalidDelegation(err) {
   return false;
 }
 
+// True when the user dismissed the wallet prompt rather than the tx genuinely
+// failing. Walks the viem cause chain (UserRejectedRequestError / EIP-1193 4001).
+function isUserRejection(err) {
+  let e = err;
+  while (e) {
+    if (e.name === "UserRejectedRequestError" || e.code === 4001) return true;
+    if (typeof e.message === "string" && /user rejected|user denied|rejected the request/i.test(e.message)) {
+      return true;
+    }
+    e = e.cause;
+  }
+  return false;
+}
+
+// "Gas paid: ~X ETH." from a mined receipt, so error paths always show the user
+// that a failed tx still cost them. Empty string if the fields aren't present.
+function gasPaidNote(receipt) {
+  try {
+    if (receipt?.gasUsed != null && receipt?.effectiveGasPrice != null) {
+      const eth = Number(formatEther(receipt.gasUsed * receipt.effectiveGasPrice));
+      return `Gas paid: ~${eth.toFixed(4)} ETH.`;
+    }
+  } catch {
+    /* fall through to empty */
+  }
+  return "";
+}
+
 // ---------------------------------------------------------------------------
 // Init
 // ---------------------------------------------------------------------------
@@ -541,15 +569,78 @@ async function onRevealClick() {
     // to the remaining count, and another caller may have advanced it meanwhile).
     const startIdx = await reader.read.nextResolveIndex();
     btn.textContent = "Confirm in wallet…";
-    const hash = await walletClient.writeContract({
-      address: contractAddress,
-      abi,
-      functionName: "resolveReceipts",
-      args: [BigInt(n)],
-      account
-    });
+
+    let hash;
+    try {
+      hash = await walletClient.writeContract({
+        address: contractAddress,
+        abi,
+        functionName: "resolveReceipts",
+        args: [BigInt(n)],
+        account
+      });
+    } catch (err) {
+      // Pre-submit failure: either the user dismissed the wallet prompt (no gas
+      // spent) or simulation reverted. Distinguish a deliberate cancel from a
+      // genuine failure so we don't label it "failed".
+      revealInFlight = false;
+      if (isUserRejection(err)) {
+        showBanner("warn", "Rejected in wallet. No gas spent.");
+      } else {
+        showBanner("error", `Reveal failed: ${describeError(err)}`);
+      }
+      btn.textContent = original;
+      btn.disabled = false;
+      $("refresh-btn").disabled = false;
+      return;
+    }
+
     btn.textContent = "Waiting for confirmation…";
-    await publicClient.waitForTransactionReceipt({ hash });
+    const receipt = await publicClient.waitForTransactionReceipt({ hash });
+
+    // A mined-but-reverted tx does NOT throw — viem returns the receipt with
+    // status "reverted". The dominant failure for resolveReceipts is running out
+    // of gas as the queue deepens, so detect that and steer the user to a smaller
+    // batch. Gas was spent either way, so always surface what it cost.
+    if (receipt.status === "reverted") {
+      revealInFlight = false;
+      const gasNote = gasPaidNote(receipt);
+
+      // Out-of-gas heuristic: an OOG revert emits no logs and burns the whole gas
+      // limit. Compare gasUsed against the tx's gas limit when we can read it.
+      let outOfGas = receipt.logs.length === 0;
+      try {
+        const tx = await publicClient.getTransaction({ hash });
+        if (tx?.gas != null && receipt.gasUsed >= tx.gas) outOfGas = true;
+      } catch {
+        /* fall back to the no-logs heuristic */
+      }
+
+      if (outOfGas) {
+        showBanner("error", `Transaction ran out of gas. Try a smaller batch. ${gasNote}`.trim());
+      } else {
+        // Replay the call at the mined block to recover the revert reason viem
+        // strips from the receipt.
+        let reason = "";
+        try {
+          const tx = await publicClient.getTransaction({ hash });
+          await publicClient.call({
+            account,
+            to: tx.to,
+            data: tx.input,
+            value: tx.value,
+            blockNumber: receipt.blockNumber
+          });
+        } catch (callErr) {
+          reason = describeError(callErr);
+        }
+        showBanner("error", `Reveal reverted${reason ? `: ${reason}` : ""}. ${gasNote}`.trim());
+      }
+      btn.textContent = original;
+      btn.disabled = false;
+      $("refresh-btn").disabled = false;
+      return;
+    }
 
     const endIdx = await reader.read.nextResolveIndex();
     const did = endIdx - startIdx;
@@ -565,7 +656,7 @@ async function onRevealClick() {
     await refreshAll();
   } catch (err) {
     revealInFlight = false;
-    showBanner("error", `Reveal failed. ${describeError(err)}`);
+    showBanner("error", `Reveal failed: ${describeError(err)}`);
     btn.textContent = original;
     btn.disabled = false;
     $("refresh-btn").disabled = false;
