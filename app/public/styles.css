@@ -350,6 +350,13 @@ a.receipt-cell:hover .receipt-thumb { border-color: var(--accent); }
   margin-bottom: 6px;
 }
 
+.reveal-buttons {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.reveal-buttons .btn { flex: 1; text-align: center; }
+
 .reveal-cost {
   font-family: ui-monospace, "SF Mono", Consolas, monospace;
   font-size: 12px;

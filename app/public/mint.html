@@ -95,11 +95,12 @@
     <div id="reveal-progress" class="reveal-progress">— still unrevealed</div>
 
     <div id="reveal-controls">
-      <input id="reveal-count" class="reveal-slider" type="range" min="25" max="50" step="25" value="25">
-      <div class="reveal-slider-label">Reveal <span id="reveal-n">25</span> Abnormies</div>
-      <div id="reveal-hint" class="section-note">Larger batches may run out of gas as resolution progresses. 50 is currently safe.</div>
-      <div id="reveal-cost" class="reveal-cost">Estimated gas fee: …</div>
-      <button id="reveal-btn" class="btn btn-primary">Reveal 25</button>
+      <p id="reveal-clarify" class="section-note">These reveal Abnormies in queue order. You may reveal your own or someone else's; you don't choose.</p>
+      <div class="reveal-buttons">
+        <button id="reveal-btn-25" class="btn btn-primary" data-count="25">Reveal 25</button>
+        <button id="reveal-btn-50" class="btn btn-primary" data-count="50">Reveal 50</button>
+      </div>
+      <div id="reveal-remaining" class="reveal-cost"></div>
     </div>
 
     <div id="reveal-complete" class="empty" hidden>Reveal complete. View the collection.</div>

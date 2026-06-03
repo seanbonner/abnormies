@@ -91,13 +91,9 @@ let discoveredVaults = []; // vaults that have delegated to the connected wallet
 let delegationsAccount = null; // account the vault dropdown was last populated for
 
 // Phase 3 reveal state.
-const RESOLVE_GAS_PER_RECEIPT = 120473n; // measured per-receipt cost of resolveReceipts (gas investigation)
 let revealInFlight = false;
-let revealNextResolve = 0n; // cursor and total, cached for the success-message range
-let revealReceiptsLen = 0n;
-let revealGasPrice = 0n; // wei, refreshed for the cost estimate
-let revealEthUsd = null; // number, or null if the price feed is unavailable
-let revealCostTimer = null; // 30s refresh interval, only while the reveal UI is shown
+let revealNextResolve = 0n; // resolution cursor, cached for the success-message range + remaining count
+let revealReceiptsLen = 0n; // total receipts, cached alongside the cursor
 
 // ---------------------------------------------------------------------------
 // DOM helpers
@@ -233,8 +229,8 @@ async function init() {
   $("claim-btn").addEventListener("click", onClaimAll);
   $("vault-input").addEventListener("input", onVaultInput);
   $("vault-select").addEventListener("change", onVaultSelect);
-  $("reveal-count").addEventListener("input", updateRevealSlider);
-  $("reveal-btn").addEventListener("click", onRevealClick);
+  $("reveal-btn-25").addEventListener("click", onRevealClick);
+  $("reveal-btn-50").addEventListener("click", onRevealClick);
   $("trigger-reveal-btn").addEventListener("click", onTriggerRevealClick);
 
   if (!contractAddress || !isAddress(contractAddress)) {
@@ -469,9 +465,8 @@ async function refreshPhaseAndSupply() {
     $("reveal-progress").textContent = `${(receiptsLen - nextResolve).toString()} still unrevealed`;
     $("reveal-controls").hidden = revealComplete;
     $("reveal-complete").hidden = !revealComplete;
-    if (!revealComplete) updateRevealSlider();
+    if (!revealComplete) updateRevealControls();
   }
-  manageRevealCostTimer(revealInProgress);
 
   if (currentPhase === 1 && !sealed) await prepareMint();
 }
@@ -481,68 +476,53 @@ async function refreshPhaseAndSupply() {
 // ---------------------------------------------------------------------------
 // resolveReceipts(N) is permissionless and advances the global cursor by N (the
 // contract clamps to the remaining count). The caller chooses HOW MANY, never
-// WHICH — the next N in queue order are minted to their owners. Cost is estimated
-// from the measured per-receipt gas times the live gas price.
-function updateRevealSlider() {
-  const n = Number($("reveal-count").value);
-  $("reveal-n").textContent = String(n);
-  const wrongChain = walletChainId != null && walletChainId !== expectedChainId;
-  const btn = $("reveal-btn");
-  if (!account) {
-    btn.textContent = "Connect wallet to reveal";
-    btn.disabled = false;
-  } else {
-    btn.textContent = `Reveal ${n}`;
-    btn.disabled = wrongChain || revealInFlight;
-  }
-  renderRevealCost();
+// WHICH — the next N in queue order are minted to their owners. The UI offers two
+// fixed batch sizes (25, 50) and reports how many of each would finish the queue.
+const REVEAL_BUTTON_IDS = ["reveal-btn-25", "reveal-btn-50"];
+
+// Receipts still awaiting resolution, from the cursor/total cached by refreshState.
+function revealRemaining() {
+  const rem = revealReceiptsLen - revealNextResolve;
+  return rem > 0n ? rem : 0n;
 }
 
-function renderRevealCost() {
-  const n = BigInt(Number($("reveal-count").value));
-  const el = $("reveal-cost");
-  if (revealGasPrice === 0n) {
-    el.textContent = "Estimated gas fee: …";
+// Ceiling division for BigInts (transactions of size `size` to clear `total`).
+function ceilDivBig(total, size) {
+  return (total + size - 1n) / size;
+}
+
+// Reconcile the reveal buttons + the live "transactions to finish" line with the
+// latest on-chain cursor and wallet/chain state. Called from refreshState (page
+// load, account change, post-tx refresh) so the numbers always reflect a fresh read.
+function updateRevealControls() {
+  const wrongChain = walletChainId != null && walletChainId !== expectedChainId;
+  const disabled = wrongChain || revealInFlight;
+  for (const id of REVEAL_BUTTON_IDS) {
+    const btn = $(id);
+    if (!btn) continue;
+    btn.textContent = `Reveal ${btn.dataset.count}`;
+    btn.disabled = disabled;
+  }
+  renderRevealRemaining();
+}
+
+function renderRevealRemaining() {
+  const el = $("reveal-remaining");
+  if (!el) return;
+  const rem = revealRemaining();
+  if (rem === 0n) {
+    el.textContent = "";
     return;
   }
-  const eth = Number(formatEther(n * RESOLVE_GAS_PER_RECEIPT * revealGasPrice));
-  let text = `Estimated gas fee: ~${eth.toFixed(4)} ETH`;
-  if (revealEthUsd != null) {
-    text += ` (~$${(eth * revealEthUsd).toLocaleString(undefined, { maximumFractionDigits: 0 })})`;
-  }
-  el.textContent = text;
+  const n = ceilDivBig(rem, 50n);
+  const m = ceilDivBig(rem, 25n);
+  el.textContent =
+    `Currently needs ${n.toString()}x Reveal 50 or ${m.toString()}x Reveal 25 transactions to finish the collection.`;
 }
 
-async function refreshRevealCost() {
-  try {
-    revealGasPrice = await publicClient.getGasPrice();
-  } catch {
-    /* keep last known gas price */
-  }
-  try {
-    const res = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd");
-    if (res.ok) {
-      const j = await res.json();
-      if (typeof j?.ethereum?.usd === "number") revealEthUsd = j.ethereum.usd;
-    }
-  } catch {
-    /* leave USD off on CORS/network failure; ETH estimate still shows */
-  }
-  renderRevealCost();
-}
-
-// Start the 30s gas/price refresh only while the reveal UI is visible.
-function manageRevealCostTimer(active) {
-  if (active && !revealCostTimer) {
-    refreshRevealCost();
-    revealCostTimer = setInterval(refreshRevealCost, 30000);
-  } else if (!active && revealCostTimer) {
-    clearInterval(revealCostTimer);
-    revealCostTimer = null;
-  }
-}
-
-async function onRevealClick() {
+async function onRevealClick(ev) {
+  const btn = ev.currentTarget;
+  const n = Number(btn.dataset.count);
   if (!account) {
     await connect();
     return;
@@ -556,11 +536,17 @@ async function onRevealClick() {
   }
   if (revealInFlight) return;
 
-  const n = Number($("reveal-count").value);
-  const btn = $("reveal-btn");
-  const original = btn.textContent;
+  // Re-enable both buttons + refresh and re-sync the controls from current state.
+  const restore = () => {
+    revealInFlight = false;
+    $("refresh-btn").disabled = false;
+    updateRevealControls();
+  };
   revealInFlight = true;
-  btn.disabled = true;
+  for (const id of REVEAL_BUTTON_IDS) {
+    const b = $(id);
+    if (b) b.disabled = true;
+  }
   $("refresh-btn").disabled = true;
 
   try {
@@ -583,15 +569,12 @@ async function onRevealClick() {
       // Pre-submit failure: either the user dismissed the wallet prompt (no gas
       // spent) or simulation reverted. Distinguish a deliberate cancel from a
       // genuine failure so we don't label it "failed".
-      revealInFlight = false;
       if (isUserRejection(err)) {
         showBanner("warn", "Rejected in wallet. No gas spent.");
       } else {
         showBanner("error", `Reveal failed: ${describeError(err)}`);
       }
-      btn.textContent = original;
-      btn.disabled = false;
-      $("refresh-btn").disabled = false;
+      restore();
       return;
     }
 
@@ -603,7 +586,6 @@ async function onRevealClick() {
     // of gas as the queue deepens, so detect that and steer the user to a smaller
     // batch. Gas was spent either way, so always surface what it cost.
     if (receipt.status === "reverted") {
-      revealInFlight = false;
       const gasNote = gasPaidNote(receipt);
 
       // Out-of-gas heuristic: an OOG revert emits no logs and burns the whole gas
@@ -636,15 +618,14 @@ async function onRevealClick() {
         }
         showBanner("error", `Reveal reverted${reason ? `: ${reason}` : ""}. ${gasNote}`.trim());
       }
-      btn.textContent = original;
-      btn.disabled = false;
-      $("refresh-btn").disabled = false;
+      restore();
       return;
     }
 
     const endIdx = await reader.read.nextResolveIndex();
     const did = endIdx - startIdx;
     revealInFlight = false;
+    $("refresh-btn").disabled = false;
     if (did === 0n) {
       showBanner("warn", "Those positions were already revealed by someone else.");
     } else {
@@ -653,13 +634,12 @@ async function onRevealClick() {
         `Revealed ${did.toString()} Abnormies.`
       );
     }
+    // refreshAll -> refreshState re-reads the cursor/total and calls
+    // updateRevealControls, so the remaining-tx line reflects this tx.
     await refreshAll();
   } catch (err) {
-    revealInFlight = false;
     showBanner("error", `Reveal failed: ${describeError(err)}`);
-    btn.textContent = original;
-    btn.disabled = false;
-    $("refresh-btn").disabled = false;
+    restore();
   }
 }
 
