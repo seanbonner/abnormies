@@ -693,8 +693,8 @@ function bootstrap() {
       return;
     }
 
-    setFreezeStatus("ok", `${action} confirmed. Loading frozen target #${targetId}…`);
-    window.location.href = `./abnormie.html?id=${targetId}`;
+    setFreezeStatus("ok", `${action} confirmed. Returning to Clouds…`);
+    window.location.href = "./clouds.html";
   }
 
   // Display-only relabel layer for the on-chain trait names. The renderer
