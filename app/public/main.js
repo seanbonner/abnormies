@@ -454,11 +454,11 @@ function renderRevealCost() {
   const n = BigInt(Number($("reveal-count").value));
   const el = $("reveal-cost");
   if (revealGasPrice === 0n) {
-    el.textContent = "Estimated cost: …";
+    el.textContent = "Estimated gas fee: …";
     return;
   }
   const eth = Number(formatEther(n * RESOLVE_GAS_PER_RECEIPT * revealGasPrice));
-  let text = `Estimated cost: ~${eth.toFixed(4)} ETH`;
+  let text = `Estimated gas fee: ~${eth.toFixed(4)} ETH`;
   if (revealEthUsd != null) {
     text += ` (~$${(eth * revealEthUsd).toLocaleString(undefined, { maximumFractionDigits: 0 })})`;
   }

@@ -452,8 +452,8 @@ a.receipt-cell:hover .receipt-thumb { border-color: var(--accent); }
   font-size: 11px;
   color: var(--muted);
 }
-.foot a { color: var(--text); text-decoration: none; border-bottom: 1px solid var(--border); }
-.foot a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+.foot a, .section-note a { color: var(--text); text-decoration: none; border-bottom: 1px solid var(--border); }
+.foot a:hover, .section-note a:hover { color: var(--accent); border-bottom-color: var(--accent); }
 
 /* ===========================================================================
    Abnormie detail page (abnormie.html). Extends the shared palette and
