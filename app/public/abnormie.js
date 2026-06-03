@@ -407,7 +407,7 @@ function bootstrap() {
     // "Update from Normies" covers BOTH pokeSeed and pokeAwakening — it
     // pre-checks state and fires only the writes that actually do something.
     const defs = [
-      { label: "Update from Normies", visible: true, onClick: onUpdateFromNormies },
+      { label: "Refresh from seed", visible: true, onClick: onUpdateFromNormies },
       { label: "View on OpenSea", visible: true, onClick: onViewOnOpenSea },
       { label: "Download SVG", visible: true, onClick: onDownloadSvg },
       { label: "Download GIF", visible: true, onClick: comingSoon },
