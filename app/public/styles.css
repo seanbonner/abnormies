@@ -23,8 +23,8 @@
   --altocumulus: #7c7d7e;
   --nimbostratus: #48494b;
 
-  /* Status tints, kept within the warm palette. */
-  --ok: #4a6b4a;
+  /* Status tints, kept within the warm palette. No green-family color: success
+     uses the existing --text neutral so the warm/earth palette stays consistent. */
   --warn: #8a6a30;
   --error: #8a3030;
 }
@@ -184,22 +184,22 @@ header { margin-bottom: 28px; }
 
 .btn-sm { padding: 6px 14px; font-size: 11px; }
 
-/* Banner */
+/* Banner — full 1px border, no left-bar emphasis. Variant colors apply to the
+   border + text uniformly using existing palette only (no green-family hue). */
 .banner {
   padding: 12px 16px;
   margin-bottom: 18px;
   border: 1px solid var(--border);
-  border-left-width: 4px;
   background: var(--panel);
   font-family: ui-monospace, "SF Mono", Consolas, monospace;
   font-size: 13px;
   line-height: 1.5;
 }
 .banner[hidden] { display: none; }
-.banner-error { border-left-color: var(--error); color: var(--error); }
-.banner-warn  { border-left-color: var(--warn);  color: var(--warn); }
-.banner-ok    { border-left-color: var(--ok);    color: var(--ok); }
-.banner-info  { border-left-color: var(--muted); color: var(--muted); }
+.banner-error { border-color: var(--error); color: var(--error); }
+.banner-warn  { border-color: var(--warn);  color: var(--warn); }
+.banner-ok    { border-color: var(--text);  color: var(--text); }
+.banner-info  { border-color: var(--muted); color: var(--muted); }
 
 /* Phase indicator */
 .phase-indicator {
