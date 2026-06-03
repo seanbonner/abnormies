@@ -382,7 +382,7 @@ function bootstrap() {
     link.target = "_blank";
     link.rel = "noopener";
     link.className = "detail-seed-os";
-    link.textContent = "View on OpenSea →";
+    link.textContent = "View Normie on OpenSea →";
     nodes.push(link);
     $("seed-info").replaceChildren(...nodes);
   }
