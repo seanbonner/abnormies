@@ -19,6 +19,7 @@ import {
   zeroAddress
 } from "viem";
 import { mainnet, sepolia } from "viem/chains";
+import { getHoldings } from "./holdings.js";
 
 const cfg = window.ABNORMIES_CONFIG || {};
 const CHAINS = { 1: mainnet, 11155111: sepolia };
@@ -1319,12 +1320,13 @@ async function onClaimAll() {
 }
 
 // ---------------------------------------------------------------------------
-// My Abnormies (Unrevealed)
+// My Abnormies
 // ---------------------------------------------------------------------------
-// No per-owner receipt index exists on-chain, so we scan receiptsLength() and
-// filter receiptAt(i) by claimant against the active target (the selected vault
-// when set, otherwise the connected wallet). Token IDs aren't assigned until
-// reveal, so each holding renders as "[unrevealed]". Batched via Multicall3.
+// Holdings are sourced from the shared getHoldings() helper, which unions
+// (a) RESOLVED tokens currently owned per ERC-721 Transfer events — catches
+// secondary-market moves like OpenSea purchases — with (b) UNRESOLVED claims
+// recorded against the wallet's address as claimant. Each holding renders as
+// either an Abnormie cell (resolved) or a "[unrevealed]" stand-in.
 async function loadReceipts() {
   const section = $("receipts-section");
   const listEl = $("receipts-list");
@@ -1348,53 +1350,14 @@ async function loadReceipts() {
   listEl.innerHTML = "<div class='loading'>Loading Abnormies…</div>";
   empty.hidden = true;
 
-  let len = 0;
+  let owned;
   try {
-    len = Number(await reader.read.receiptsLength());
+    owned = await getHoldings(target, { address: contractAddress, abi }, publicClient);
   } catch {
     listEl.innerHTML = "";
     empty.hidden = false;
     empty.textContent = "Could not load Abnormies.";
     return;
-  }
-
-  if (len === 0) {
-    listEl.innerHTML = "";
-    empty.hidden = false;
-    empty.textContent = "Nothing to show yet.";
-    return;
-  }
-
-  const targetLower = target.toLowerCase();
-  const owned = []; // matching receipts in queue order: { resolved, abnormieId }
-  const CHUNK = 400;
-  for (let start = 0; start < len; start += CHUNK) {
-    const end = Math.min(start + CHUNK, len);
-    const contracts = [];
-    for (let i = start; i < end; i++) {
-      contracts.push({ address: contractAddress, abi, functionName: "receiptAt", args: [BigInt(i)] });
-    }
-
-    let results;
-    try {
-      results = await publicClient.multicall({ contracts });
-    } catch {
-      results = [];
-      for (let i = start; i < end; i++) {
-        try {
-          results.push({ status: "success", result: await reader.read.receiptAt([BigInt(i)]) });
-        } catch {
-          results.push({ status: "failure" });
-        }
-      }
-    }
-
-    results.forEach((r) => {
-      if (r.status !== "success") return;
-      // Receipt tuple: (claimant, normieId, fromPhase1, snapshotCustomized, resolved, abnormieId).
-      if (r.result[0].toLowerCase() !== targetLower) return;
-      owned.push({ resolved: Boolean(r.result[4]), abnormieId: Number(r.result[5]) });
-    });
   }
 
   if (owned.length === 0) {
@@ -1404,7 +1367,6 @@ async function loadReceipts() {
     return;
   }
 
-  listEl.innerHTML = "";
   // Resolved holdings have a real Abnormie image; fetch them in one multicall.
   // tokenURI only succeeds for minted (resolved) tokens.
   const resolvedIds = owned.filter((o) => o.resolved).map((o) => o.abnormieId);
@@ -1432,8 +1394,11 @@ async function loadReceipts() {
     });
   }
 
+  listEl.innerHTML = "";
   for (const o of owned) {
-    listEl.appendChild(makeReceiptCell({ resolved: o.resolved, abnormieId: o.abnormieId, image: images[o.abnormieId] }));
+    listEl.appendChild(
+      makeReceiptCell({ resolved: o.resolved, abnormieId: o.abnormieId, image: images[o.abnormieId] })
+    );
   }
 }
 

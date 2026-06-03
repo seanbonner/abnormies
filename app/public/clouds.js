@@ -13,6 +13,7 @@ import {
   getContract
 } from "viem";
 import { mainnet, sepolia } from "viem/chains";
+import { getHoldings } from "./holdings.js";
 
 const cfg = window.ABNORMIES_CONFIG || {};
 const CHAINS = { 1: mainnet, 11155111: sepolia };
@@ -199,9 +200,10 @@ async function refreshAll() {
 }
 
 // ---------------------------------------------------------------------------
-// Receipts — scan all receipts for the connected wallet, render the grid.
-// Same logic as main.js loadReceipts but without the delegate-vault path
-// (Clouds is purely "what does THIS wallet hold").
+// Holdings — sourced from the shared getHoldings() helper, which unions
+// (a) RESOLVED tokens currently owned per ERC-721 Transfer events — catches
+// secondary-market moves like OpenSea purchases — with (b) UNRESOLVED claims
+// recorded against the wallet's address as claimant.
 // ---------------------------------------------------------------------------
 async function loadReceipts() {
   const section = $("receipts-section");
@@ -217,51 +219,14 @@ async function loadReceipts() {
   listEl.innerHTML = "<div class='loading'>Loading Abnormies…</div>";
   empty.hidden = true;
 
-  let len = 0;
+  let owned;
   try {
-    len = Number(await reader.read.receiptsLength());
+    owned = await getHoldings(account, { address: contractAddress, abi }, publicClient);
   } catch {
     listEl.innerHTML = "";
     empty.hidden = false;
     empty.textContent = "Could not load Abnormies.";
     return;
-  }
-
-  if (len === 0) {
-    listEl.innerHTML = "";
-    empty.hidden = false;
-    empty.textContent = "Nothing to show yet.";
-    return;
-  }
-
-  const targetLower = account.toLowerCase();
-  const owned = []; // { resolved, abnormieId } in queue order
-  const CHUNK = 400;
-  for (let start = 0; start < len; start += CHUNK) {
-    const end = Math.min(start + CHUNK, len);
-    const contracts = [];
-    for (let i = start; i < end; i++) {
-      contracts.push({ address: contractAddress, abi, functionName: "receiptAt", args: [BigInt(i)] });
-    }
-    let results;
-    try {
-      results = await publicClient.multicall({ contracts });
-    } catch {
-      results = [];
-      for (let i = start; i < end; i++) {
-        try {
-          results.push({ status: "success", result: await reader.read.receiptAt([BigInt(i)]) });
-        } catch {
-          results.push({ status: "failure" });
-        }
-      }
-    }
-    results.forEach((r) => {
-      if (r.status !== "success") return;
-      // Receipt tuple: (claimant, normieId, fromPhase1, snapshotCustomized, resolved, abnormieId)
-      if (r.result[0].toLowerCase() !== targetLower) return;
-      owned.push({ resolved: Boolean(r.result[4]), abnormieId: Number(r.result[5]) });
-    });
   }
 
   if (owned.length === 0) {
@@ -299,7 +264,9 @@ async function loadReceipts() {
 
   listEl.innerHTML = "";
   for (const o of owned) {
-    listEl.appendChild(makeReceiptCell({ resolved: o.resolved, abnormieId: o.abnormieId, image: images[o.abnormieId] }));
+    listEl.appendChild(
+      makeReceiptCell({ resolved: o.resolved, abnormieId: o.abnormieId, image: images[o.abnormieId] })
+    );
   }
 }
 

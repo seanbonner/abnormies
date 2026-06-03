@@ -73,7 +73,10 @@ await mkdir(resolve(appOut, "abi"), { recursive: true });
 await cp(publicDir, appOut, {
   recursive: true,
   filter: (src) =>
-    !src.endsWith("/main.js") && !src.endsWith("/abnormie.js") && !src.endsWith("/clouds.js")
+    !src.endsWith("/main.js") &&
+    !src.endsWith("/abnormie.js") &&
+    !src.endsWith("/clouds.js") &&
+    !src.endsWith("/holdings.js")
 });
 
 // Slim the vendored Foundry artifact to just its ABI for the runtime fetch.
