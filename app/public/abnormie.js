@@ -310,7 +310,7 @@ function bootstrap() {
     hero.alt = `Abnormie #${id}`;
 
     renderChips({ isStatic, chipDead, chipCustomized, aligned });
-    renderSeedPanel({ seedId, ownerNormie, customized: seed.customized, awakened, agentId, normieImg });
+    renderSeedPanel({ seedId, ownerNormie, burned: seed.burned, customized: seed.customized, awakened, agentId, normieImg });
     renderActions({ seedDead: seed.burned, seedCustomized: seed.customized, isActive: !isStatic, ownsAbnormie });
     renderTraits(metadata.attributes || []);
 
@@ -360,7 +360,7 @@ function bootstrap() {
     $("chips").replaceChildren(...nodes);
   }
 
-  function renderSeedPanel({ seedId, ownerNormie, customized, awakened, agentId, normieImg }) {
+  function renderSeedPanel({ seedId, ownerNormie, burned, customized, awakened, agentId, normieImg }) {
     const img = $("seed-img");
     if (normieImg) {
       img.src = normieImg;
@@ -371,7 +371,10 @@ function bootstrap() {
 
     const awakenedText =
       awakened && agentId != null ? `Agent #${agentId}` : awakened ? "Yes" : "No";
-    const ownerText = ownerNormie ? shortAddr(ownerNormie) : "— (burned?)";
+    // seedBurned (from getSeedState) is the contract's authoritative burn flag, so
+    // a burned seed reads "Burned" definitively rather than inferring it from a
+    // reverting ownerOf. Only when not burned does a missing owner fall back to "—".
+    const ownerText = burned ? "Burned" : ownerNormie ? shortAddr(ownerNormie) : "—";
     const osUrl = `${OPENSEA_BASE[expectedChainId] || OPENSEA_BASE[1]}/assets/${
       OPENSEA_CHAIN_SLUG[expectedChainId] || "ethereum"
     }/${normiesAddress}/${seedId}`;
