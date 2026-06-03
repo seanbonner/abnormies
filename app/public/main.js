@@ -229,8 +229,14 @@ async function init() {
   $("claim-btn").addEventListener("click", onClaimAll);
   $("vault-input").addEventListener("input", onVaultInput);
   $("vault-select").addEventListener("change", onVaultSelect);
-  $("reveal-btn-25").addEventListener("click", onRevealClick);
-  $("reveal-btn-50").addEventListener("click", onRevealClick);
+  // The reveal buttons live only in the Phase III reveal section. Bind them
+  // defensively: if a stale cached mint.html (deploy/CDN skew) is served against
+  // fresh JS, these IDs can be absent, and an unguarded addEventListener on null
+  // throws and aborts ALL of init() — leaving the page stuck on "Loading…" with
+  // a "Cannot read properties of null" banner. Optional chaining makes a missing
+  // button a no-op; the reveal section is hidden in that state anyway.
+  $("reveal-btn-25")?.addEventListener("click", onRevealClick);
+  $("reveal-btn-50")?.addEventListener("click", onRevealClick);
   $("trigger-reveal-btn").addEventListener("click", onTriggerRevealClick);
 
   if (!contractAddress || !isAddress(contractAddress)) {
