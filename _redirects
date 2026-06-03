@@ -1,0 +1,9 @@
+# Cloudflare Pages redirect rules.
+#
+# /app/portfolio* was renamed to /app/clouds*; anyone hitting the old URL
+# (stale browser cache, external bookmark, OpenSea description, etc.) gets
+# 301'd to the new page instead of falling into Cloudflare's soft-404 to
+# the teaser index.html.
+
+/app/portfolio.html  /app/clouds.html  301
+/app/portfolio       /app/clouds       301

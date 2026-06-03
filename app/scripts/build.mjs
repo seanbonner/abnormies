@@ -60,6 +60,7 @@ const rootFiles = [
   "favicon.svg",
   "og.png",
   "_headers",
+  "_redirects",
   "robots.txt",
   "llms.txt"
 ];
