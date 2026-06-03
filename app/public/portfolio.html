@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Abnormies — Portfolio</title>
+<meta name="description" content="Your Abnormies holdings.">
+<link rel="stylesheet" href="./styles.css">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon.ico" sizes="32x32">
+</head>
+<body>
+
+<div class="wrap">
+
+  <header>
+    <a href="../index.html" aria-label="Abnormies home" style="color: inherit; text-decoration: none;">
+      <div class="wordmark">ABNORMIES</div>
+    </a>
+    <div class="tagline">Portfolio</div>
+  </header>
+
+  <!-- Wallet bar -->
+  <div class="wallet-bar">
+    <button id="connect-btn" class="btn btn-outline">Connect</button>
+    <div class="wallet-info">
+      <span id="wallet-address" class="wallet-address">Not connected</span>
+    </div>
+    <div class="wallet-meta"></div>
+    <button id="refresh-btn" class="btn btn-outline">Refresh</button>
+  </div>
+
+  <!-- Status banner -->
+  <div id="banner" class="banner" hidden></div>
+
+  <!-- My Abnormies (connected only) -->
+  <section id="receipts-section" class="panel" hidden>
+    <h2>My Abnormies</h2>
+    <p class="section-note">Token IDs and seed Normie pairings are both assigned at reveal. Click any resolved Abnormie to see its detail page.</p>
+    <div id="receipts-list"></div>
+    <div id="receipts-empty" class="empty" hidden>Nothing to show yet.</div>
+  </section>
+
+  <div class="foot">
+    <div>Abnormies 2026 · <a href="https://creativecommons.org/publicdomain/zero/1.0/">CC0</a></div>
+    <div><a href="../spec.html">Specification</a> · <a href="../index.html">About</a></div>
+  </div>
+
+</div>
+
+<!-- config.js sets window.ABNORMIES_CONFIG and must load before the module. -->
+<script src="./config.js"></script>
+<script type="module" src="./portfolio.js"></script>
+
+</body>
+</html>

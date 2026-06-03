@@ -71,7 +71,8 @@ await mkdir(resolve(appOut, "abi"), { recursive: true });
 // bundled versions below. Everything lands under dist/app/ (served at /app/).
 await cp(publicDir, appOut, {
   recursive: true,
-  filter: (src) => !src.endsWith("/main.js") && !src.endsWith("/abnormie.js")
+  filter: (src) =>
+    !src.endsWith("/main.js") && !src.endsWith("/abnormie.js") && !src.endsWith("/portfolio.js")
 });
 
 // Slim the vendored Foundry artifact to just its ABI for the runtime fetch.
@@ -85,10 +86,15 @@ await writeFile(resolve(appOut, "abi/Abnormies.json"), `${JSON.stringify({ abi: 
 await writeFile(resolve(appOut, "config.js"), `window.ABNORMIES_CONFIG = ${JSON.stringify(config, null, 2)};\n`);
 
 // Bundle the entries: viem inlined, self-contained modules, no CDN at runtime.
-//   main.js     -> Phase 1/2 claim + mint app (mint.html)
-//   abnormie.js -> post-reveal detail page (abnormie.html)
+//   main.js      -> Phase 1/2/3 claim + mint + reveal app (mint.html)
+//   abnormie.js  -> post-reveal detail page (abnormie.html)
+//   portfolio.js -> portfolio page (portfolio.html)
 await esbuild.build({
-  entryPoints: [resolve(publicDir, "main.js"), resolve(publicDir, "abnormie.js")],
+  entryPoints: [
+    resolve(publicDir, "main.js"),
+    resolve(publicDir, "abnormie.js"),
+    resolve(publicDir, "portfolio.js")
+  ],
   bundle: true,
   format: "esm",
   target: "es2022",

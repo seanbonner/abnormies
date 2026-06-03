@@ -657,7 +657,7 @@ function bootstrap() {
   async function init() {
     renderWallet();
     $("wallet-address").addEventListener("click", connect);
-    // Portfolio page is the next prompt; stub the back link for now.
+    // Back link returns to the Portfolio page (sibling under /app/).
     $("back-link").setAttribute("href", "./portfolio.html");
 
     if (!contractAddress || !/^0x[0-9a-fA-F]{40}$/.test(contractAddress)) {
