@@ -395,7 +395,7 @@ function bootstrap() {
     // pre-checks state and fires only the writes that actually do something.
     const defs = [
       { label: "Update from Normies", visible: true, onClick: onUpdateFromNormies },
-      { label: "Refresh OS", visible: true, onClick: onRefreshOS },
+      { label: "View on OpenSea", visible: true, onClick: onViewOnOpenSea },
       { label: "Download SVG", visible: true, onClick: onDownloadSvg },
       { label: "Download GIF", visible: true, onClick: comingSoon },
       { label: "Thunder", visible: ownsAbnormie && seedDead && isActive, danger: true, onClick: comingSoon },
@@ -593,13 +593,20 @@ function bootstrap() {
     }
   }
 
-  // Refresh OS: opens OpenSea's metadata-refresh endpoint in a new tab. The URL
-  // shape is per the prompt; it is acknowledged as approximate and likely needs
-  // to become the marketplace item URL or an authenticated API call. See report.
-  function onRefreshOS() {
+  // "View on OpenSea" — opens this Abnormie's OpenSea item page in a new tab.
+  // Earlier versions tried to GET OpenSea's v2 refresh API directly via
+  // window.open, which (a) used the wrong HTTP verb (refresh is POST only) and
+  // (b) wouldn't have authenticated anyway (no X-API-KEY available client-side).
+  // OpenSea's own "Refresh metadata" button on the item page is the reliable
+  // path — it requires zero credentials and is one click from here.
+  function onViewOnOpenSea() {
     const slug = OPENSEA_CHAIN_SLUG[expectedChainId] || "ethereum";
-    const url = `https://api.opensea.io/api/v2/chain/${slug}/contract/${contractAddress}/nfts/${currentId}/refresh`;
-    window.open(url, "_blank", "noopener");
+    const base = OPENSEA_BASE[expectedChainId] || OPENSEA_BASE[1];
+    const url = `${base}/item/${slug}/${contractAddress}/${currentId}`;
+    const opened = window.open(url, "_blank", "noopener");
+    if (!opened) {
+      showBanner("warn", `Popup blocked. Open ${url} to refresh OpenSea metadata.`);
+    }
   }
 
   function onDownloadSvg() {
