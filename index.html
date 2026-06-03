@@ -317,7 +317,7 @@ body {
       <button class="randomize-btn" id="randomize-btn">Randomize ↻</button>
     </div>
     <div class="sample-disclaimer">
-      Example only. Randomly generated client-side to illustrate the visual language. Actual Abnormies are produced at mint time from the on-chain history of their seed Normie and the Abnormies contract's own event log.
+      Example only. Randomly generated to illustrate the visual language.
     </div>
   </div>
 
@@ -495,7 +495,6 @@ function render(spec) {
   drawGrid(grid);
 
   let metaParts = [
-    `<span class="meta-id">Seed Normie #${spec.normieId}</span>`,
     `<span class="meta-state">${stateLabel(spec.state)}</span>`
   ];
   if (spec.inverted) {
