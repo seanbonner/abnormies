@@ -651,6 +651,54 @@ a.receipt-cell:hover .receipt-thumb { border-color: var(--accent); }
 }
 .btn-danger:hover { background: var(--error); color: var(--bg); }
 
+/* Freeze-target picker (inline, shared by Thunder + Lightning) */
+.freeze-picker {
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+}
+.freeze-picker-heading {
+  margin: 0 0 6px;
+  font-family: 'Robotastic', system-ui, sans-serif;
+  font-size: 15px;
+  color: var(--text);
+}
+.freeze-picker-note {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.freeze-picker-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 8px;
+}
+.freeze-picker-row label {
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-size: 12px;
+  color: var(--muted);
+}
+.freeze-picker-row input {
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-size: 13px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  border-radius: 4px;
+  min-width: 0;
+}
+.freeze-picker-controls {
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+}
+.freeze-status-warn { color: var(--error); }
+.freeze-status-ok { color: var(--text); }
+.freeze-status-info { color: var(--muted); }
+
 /* Traits panel: full-width label/value rows with dotted separators */
 .detail-traits {
   display: grid;

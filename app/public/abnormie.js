@@ -6,8 +6,10 @@
 // canvas storage (customization), and the Normies API (agent binding). The
 // "Update from Normies" action pre-checks state and fires pokeSeed and/or
 // pokeAwakening only when each would actually change state on-chain — never
-// a no-op write. Thunder, Lightning, and Download GIF remain "Coming soon"
-// pending the next prompt. Function names are taken from the deployed ABI.
+// a no-op write. Thunder and Lightning open an inline freeze-target picker
+// then call the corresponding contract function; the contract enforces all
+// preconditions (no pre-flight pokeSeed). Download GIF remains "Coming soon".
+// Function names are taken from the deployed ABI.
 //
 // The pure parsing helpers (decodeDataUri/parseTokenURI/extractSvgMarkup/
 // shortAddr) are exported and DOM-free so scripts/test-parse.mjs can exercise
@@ -416,6 +418,7 @@ function bootstrap() {
   }
 
   function renderActions({ seedDead, seedCustomized, isActive, ownsAbnormie }) {
+    closeFreezePicker();
     const comingSoon = () => alert("Coming soon");
     // Thunder/Lightning require the Abnormie to be Active: Static Abnormies are
     // frozen and cannot be burned (staticAt == 0 -> isActive).
@@ -426,12 +429,17 @@ function bootstrap() {
       { label: "View on OpenSea", visible: true, onClick: onViewOnOpenSea },
       { label: "Download SVG", visible: true, onClick: onDownloadSvg },
       { label: "Download GIF", visible: true, onClick: comingSoon },
-      { label: "Thunder", visible: ownsAbnormie && seedDead && isActive, danger: true, onClick: comingSoon },
+      {
+        label: "Thunder",
+        visible: ownsAbnormie && seedDead && isActive,
+        danger: true,
+        onClick: () => openFreezePicker("thunder")
+      },
       {
         label: "Lightning",
         visible: ownsAbnormie && !seedDead && seedCustomized && isActive,
         danger: true,
-        onClick: comingSoon
+        onClick: () => openFreezePicker("lightning")
       }
     ];
 
@@ -445,6 +453,248 @@ function bootstrap() {
       nodes.push(btn);
     }
     $("actions").replaceChildren(...nodes);
+  }
+
+  // -- Freeze-target picker (shared by Thunder + Lightning) -----------------
+  // Picker opens inline below the Actions row. The user enters an Abnormie ID
+  // to freeze; Validate target reads ownerOf + getAbnormieState and rejects
+  // non-existent, self-owned, or Static targets. Confirm-and-burn pops a
+  // native confirm() and calls thunder/lightning with [burnId, targetId].
+  // On success, navigates to the frozen target's detail page (the burnt
+  // Abnormie ceased to exist; the target is now Static and visually preserved).
+  let freezePickerState = null;
+
+  function closeFreezePicker() {
+    const picker = $("freeze-picker");
+    if (!picker) return;
+    picker.hidden = true;
+    picker.replaceChildren();
+    freezePickerState = null;
+  }
+
+  function openFreezePicker(action) {
+    if (currentId == null) return;
+    freezePickerState = {
+      action,
+      burnId: currentId,
+      validatedTargetId: null,
+      validatedOwner: null,
+      inFlight: false
+    };
+
+    const picker = $("freeze-picker");
+    picker.replaceChildren();
+
+    const heading = document.createElement("h3");
+    heading.className = "freeze-picker-heading";
+    heading.textContent = action === "thunder" ? "Thunder: pick a freeze target" : "Lightning: pick a freeze target";
+
+    const note = document.createElement("p");
+    note.className = "freeze-picker-note";
+    note.textContent =
+      "Enter the Abnormie ID to freeze. It must exist, still be Active (not yet Static), and be owned by someone other than you.";
+
+    const row = document.createElement("div");
+    row.className = "freeze-picker-row";
+    const label = document.createElement("label");
+    label.setAttribute("for", "freeze-target-input");
+    label.textContent = "Target Abnormie ID";
+    const input = document.createElement("input");
+    input.id = "freeze-target-input";
+    input.type = "number";
+    input.min = "0";
+    input.max = "9999";
+    input.step = "1";
+    input.inputMode = "numeric";
+    const validateBtn = document.createElement("button");
+    validateBtn.id = "freeze-validate-btn";
+    validateBtn.className = "btn btn-sm";
+    validateBtn.textContent = "Validate target";
+    row.append(label, input, validateBtn);
+
+    const status = document.createElement("p");
+    status.id = "freeze-status";
+    status.className = "detail-action-status";
+    status.hidden = true;
+
+    const controls = document.createElement("div");
+    controls.className = "freeze-picker-controls";
+    const confirmBtn = document.createElement("button");
+    confirmBtn.id = "freeze-confirm-btn";
+    confirmBtn.className = "btn btn-sm btn-danger";
+    confirmBtn.textContent = "Confirm and burn";
+    confirmBtn.disabled = true;
+    const cancelBtn = document.createElement("button");
+    cancelBtn.id = "freeze-cancel-btn";
+    cancelBtn.className = "btn btn-sm";
+    cancelBtn.textContent = "Cancel";
+    controls.append(confirmBtn, cancelBtn);
+
+    picker.append(heading, note, row, status, controls);
+    picker.hidden = false;
+
+    validateBtn.addEventListener("click", onValidateFreezeTarget);
+    confirmBtn.addEventListener("click", onConfirmBurn);
+    cancelBtn.addEventListener("click", closeFreezePicker);
+    input.addEventListener("input", () => {
+      if (!freezePickerState) return;
+      freezePickerState.validatedTargetId = null;
+      freezePickerState.validatedOwner = null;
+      confirmBtn.disabled = true;
+    });
+    input.focus();
+  }
+
+  function setFreezeStatus(kind, text) {
+    const status = $("freeze-status");
+    if (!status) return;
+    status.className = `detail-action-status freeze-status-${kind}`;
+    status.textContent = text;
+    status.hidden = false;
+  }
+
+  async function onValidateFreezeTarget() {
+    if (!freezePickerState) return;
+    const input = $("freeze-target-input");
+    const confirmBtn = $("freeze-confirm-btn");
+    const validateBtn = $("freeze-validate-btn");
+    confirmBtn.disabled = true;
+    freezePickerState.validatedTargetId = null;
+    freezePickerState.validatedOwner = null;
+
+    const raw = (input.value || "").trim();
+    if (!raw || !/^\d+$/.test(raw)) {
+      setFreezeStatus("warn", "Enter a non-negative integer Abnormie ID.");
+      return;
+    }
+    let targetId;
+    try {
+      targetId = BigInt(raw);
+    } catch {
+      setFreezeStatus("warn", "Invalid Abnormie ID.");
+      return;
+    }
+    if (targetId < 0n || targetId > 9999n) {
+      setFreezeStatus("warn", "Abnormie ID must be in [0, 9999].");
+      return;
+    }
+    if (freezePickerState.burnId != null && targetId === freezePickerState.burnId) {
+      setFreezeStatus("warn", "Target cannot be the Abnormie you are burning.");
+      return;
+    }
+
+    validateBtn.disabled = true;
+    setFreezeStatus("info", `Checking Abnormie #${targetId}…`);
+
+    let targetOwner, targetState;
+    try {
+      [targetOwner, targetState] = await Promise.all([
+        reader.read.ownerOf([targetId]),
+        reader.read.getAbnormieState([targetId])
+      ]);
+    } catch (err) {
+      validateBtn.disabled = false;
+      setFreezeStatus(
+        "warn",
+        `Could not read Abnormie #${targetId}. It may not exist yet. ${describeError(err)}`
+      );
+      return;
+    }
+    validateBtn.disabled = false;
+
+    if (!targetState || !targetState.paired) {
+      setFreezeStatus("warn", `Abnormie #${targetId} is not yet resolved — it has no seed and cannot be frozen.`);
+      return;
+    }
+    if (targetState.staticAt !== 0n) {
+      setFreezeStatus(
+        "warn",
+        `Abnormie #${targetId} is already Static (frozen at block ${targetState.staticAt}). Pick an Active target.`
+      );
+      return;
+    }
+    if (account && targetOwner && targetOwner.toLowerCase() === account.toLowerCase()) {
+      setFreezeStatus("warn", "You cannot freeze an Abnormie you own. Pick one owned by someone else.");
+      return;
+    }
+
+    freezePickerState.validatedTargetId = targetId;
+    freezePickerState.validatedOwner = targetOwner;
+    confirmBtn.disabled = false;
+    setFreezeStatus(
+      "ok",
+      `Target: Abnormie #${targetId}, owner ${shortAddr(targetOwner)}. Active. Ready to ${freezePickerState.action}.`
+    );
+  }
+
+  async function onConfirmBurn() {
+    if (!freezePickerState || freezePickerState.inFlight) return;
+    if (freezePickerState.validatedTargetId == null) return;
+
+    if (!account) {
+      await connect();
+      if (!account) return;
+    }
+    if (walletChainId != null && walletChainId !== expectedChainId) {
+      showBanner(
+        "warn",
+        `Switch your wallet to ${CHAIN_NAMES[expectedChainId] || expectedChainId} (chainId ${expectedChainId}) to ${freezePickerState.action}.`
+      );
+      return;
+    }
+
+    const { action, burnId, validatedTargetId: targetId } = freezePickerState;
+    const ok = window.confirm(
+      `This will permanently burn Abnormie #${burnId} and freeze Abnormie #${targetId}. This cannot be undone.`
+    );
+    if (!ok) return;
+
+    const confirmBtn = $("freeze-confirm-btn");
+    const cancelBtn = $("freeze-cancel-btn");
+    const validateBtn = $("freeze-validate-btn");
+    const input = $("freeze-target-input");
+    freezePickerState.inFlight = true;
+    confirmBtn.disabled = true;
+    cancelBtn.disabled = true;
+    validateBtn.disabled = true;
+    input.disabled = true;
+    setFreezeStatus("info", `Submitting ${action}…`);
+
+    let hash;
+    try {
+      hash = await walletClient.writeContract({
+        address: contractAddress,
+        abi,
+        functionName: action,
+        args: [burnId, targetId],
+        account
+      });
+    } catch (err) {
+      freezePickerState.inFlight = false;
+      confirmBtn.disabled = false;
+      cancelBtn.disabled = false;
+      validateBtn.disabled = false;
+      input.disabled = false;
+      setFreezeStatus("warn", `${action} failed: ${describeError(err)}`);
+      return;
+    }
+
+    setFreezeStatus("info", `Tx ${hash} submitted. Waiting for confirmation…`);
+
+    try {
+      await publicClient.waitForTransactionReceipt({ hash });
+    } catch (err) {
+      freezePickerState.inFlight = false;
+      confirmBtn.disabled = false;
+      cancelBtn.disabled = false;
+      validateBtn.disabled = false;
+      input.disabled = false;
+      setFreezeStatus("warn", `Confirmation failed: ${describeError(err)}`);
+      return;
+    }
+
+    setFreezeStatus("ok", `${action} confirmed. Loading frozen target #${targetId}…`);
+    window.location.href = `./abnormie.html?id=${targetId}`;
   }
 
   // Display-only relabel layer for the on-chain trait names. The renderer
