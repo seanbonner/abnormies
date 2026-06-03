@@ -510,6 +510,7 @@ function bootstrap() {
   // non-zero agentId from the Normies API AND seedAwakened is false.
   async function onUpdateFromNormies(ev) {
     const btn = ev.currentTarget;
+    const status = $("action-status");
     if (!account) {
       await connect();
       if (!account) return;
@@ -525,9 +526,12 @@ function bootstrap() {
 
     const original = btn.textContent;
     const seedId = currentSeedId;
+    let keepDisabled = false; // set in the no-op branch so the finally block doesn't re-enable it
     updateInFlight = true;
     btn.disabled = true;
     btn.textContent = "Checking…";
+    status.hidden = true;
+    status.textContent = "";
 
     try {
       // Free pre-flight reads (parallel). All can fail individually; we map
@@ -566,7 +570,12 @@ function bootstrap() {
       const needsAwakeningPoke = apiAgentId !== 0n && !seedAwakened;
 
       if (!needsSeedPoke && !needsAwakeningPoke) {
-        showBanner("ok", "Already in sync with Normies.");
+        // Nothing to write — leave the button disabled and surface inline status
+        // (no banner). keepDisabled tells the finally block to leave the
+        // disabled state alone so the user can't keep clicking a no-op.
+        status.textContent = "Already in sync with Normies.";
+        status.hidden = false;
+        keepDisabled = true;
         return;
       }
 
@@ -601,7 +610,7 @@ function bootstrap() {
     } finally {
       updateInFlight = false;
       btn.textContent = original;
-      btn.disabled = false;
+      if (!keepDisabled) btn.disabled = false;
     }
   }
 
