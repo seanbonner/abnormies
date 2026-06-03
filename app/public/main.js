@@ -304,6 +304,15 @@ function renderWalletBar() {
   }
 }
 
+// Shared visibility toggle for the supply counter (and its wrapper) plus the
+// wallet-bar Refresh button. Called from refreshPhaseAndSupply once we have
+// authoritative contract state. Kept as a single function so both elements
+// always toggle together regardless of which code path invokes the update.
+function applyMintedOutVisibility(mintedOut) {
+  $("progress-counter-wrap").hidden = mintedOut;
+  $("refresh-btn").hidden = mintedOut;
+}
+
 // ---------------------------------------------------------------------------
 // Refresh orchestration
 // ---------------------------------------------------------------------------
@@ -402,10 +411,12 @@ async function refreshPhaseAndSupply() {
   // Once minted out, the supply counter and the wallet-bar Refresh button serve
   // no purpose (nothing left to mint, nothing useful to refresh from this row).
   // Hidden via the same `hidden` attribute pattern as the section visibility
-  // decisions below so the convention stays consistent.
+  // decisions below so the convention stays consistent. Both elements MUST
+  // toggle together — the previous version applied the same `mintedOut`
+  // variable to both, but stale caches of older bundles meant some users still
+  // saw the button. This block is now the single source of truth for both.
   const mintedOut = minted >= maxSupply;
-  $("progress-counter-wrap").hidden = mintedOut;
-  $("refresh-btn").hidden = mintedOut;
+  applyMintedOutVisibility(mintedOut);
 
   $("claim-section").hidden = !claimOpen;
   $("mint-section").hidden = !(currentPhase === 1 && !sealed);
