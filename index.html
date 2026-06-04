@@ -113,6 +113,34 @@ body {
   border-bottom-color: var(--accent);
 }
 
+.cta-final {
+  display: inline-block;
+  font-family: 'Robotastic', ui-monospace, monospace;
+  font-size: 14px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin-bottom: 56px;
+  -webkit-font-smoothing: none;
+  -moz-osx-font-smoothing: unset;
+}
+
+.cta-final a {
+  color: var(--text);
+  text-decoration: none;
+  border-bottom: 1px solid var(--border);
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.cta-final a:hover {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.cta-final .sep {
+  color: var(--border);
+  margin: 0 0.6em;
+}
+
 .body p {
   margin-bottom: 1.4em;
   -webkit-hyphens: none;
@@ -561,17 +589,29 @@ randomize();
     const sealed = v.isSealed !== 0n;
     const revealed = v.revealed !== 0n;
 
+    const cta = document.getElementById("cta");
+    if (!cta) return;
+
+    // Post-reveal: front door becomes "login | the collection".
+    if (revealed) {
+      const links = document.createElement("div");
+      links.className = "cta-final";
+      links.innerHTML =
+        '<a href="/app/clouds.html">login</a>' +
+        '<span class="sep">|</span>' +
+        '<a href="https://opensea.io/collection/abnormies" target="_blank" rel="noopener">the collection</a>';
+      cta.replaceWith(links);
+      return;
+    }
+
     let text = "Claim open now →";
     let href = "/app/mint.html";
     if (phase === 0 && windowOpen) text = "Claim open now →";
     else if (phase === 0) text = "Phase I closed →";
     else if (phase === 1 && !sealed) text = "Mint open now →";
     else if (phase === 1 && sealed) { text = "Reveal pending"; href = null; }
-    else if (revealed && v.nextResolve < v.receipts) text = "REVEAL THE COLLECTION →";
     else text = "View collection →";
 
-    const cta = document.getElementById("cta");
-    if (!cta) return;
     cta.textContent = text;
     if (href) cta.setAttribute("href", href);
     else cta.removeAttribute("href");
