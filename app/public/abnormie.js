@@ -712,7 +712,7 @@ function bootstrap() {
     }
 
     setFreezeStatus("ok", `${action} confirmed. Returning to Clouds…`);
-    window.location.href = "./clouds.html";
+    window.location.href = cfg.cloudsHref || "./clouds.html";
   }
 
   // Display-only relabel layer for the on-chain trait names. The renderer
@@ -1003,8 +1003,10 @@ function bootstrap() {
   async function init() {
     renderWallet();
     $("wallet-address").addEventListener("click", connect);
-    // Back link returns to the Clouds page (sibling under /app/).
-    $("back-link").setAttribute("href", "./clouds.html");
+    // Back link returns to the Clouds page. Path comes from the runtime config
+    // (cfg.cloudsHref) so the same bundle serves both the /app/ build and the
+    // reorganized site; falls back to the sibling clouds.html when unset.
+    $("back-link").setAttribute("href", cfg.cloudsHref || "./clouds.html");
 
     if (!contractAddress || !/^0x[0-9a-fA-F]{40}$/.test(contractAddress)) {
       showError("No contract address configured. Set FRONTEND_CONTRACT_ADDRESS and rebuild.");

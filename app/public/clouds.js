@@ -82,7 +82,7 @@ function makeReceiptCell({ resolved, abnormieId, image }) {
   const labelText = resolved ? `Abnormie #${abnormieId}` : "[unrevealed]";
   const cell = document.createElement(resolved ? "a" : "div");
   cell.className = "receipt-cell";
-  if (resolved) cell.href = `/app/abnormie.html?id=${abnormieId}`;
+  if (resolved) cell.href = `${cfg.abnormieHref || "/app/abnormie.html"}?id=${abnormieId}`;
   if (resolved && image) {
     const img = document.createElement("img");
     img.className = "receipt-thumb";
