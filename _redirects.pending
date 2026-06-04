@@ -1,0 +1,23 @@
+# Cloudflare Pages redirect rules — STAGED FOR PROMOTION, not yet live.
+#
+# This file is dormant during the /newsitedemo/ review phase: the build only
+# ships the active `_redirects` to the publish root, so nothing here affects the
+# live site while the old /app/ URLs still serve real pages.
+#
+# At promotion (when the reorganized site moves from /newsitedemo/ to the root),
+# rename this file to `_redirects`. It is the COMPLETE post-promotion ruleset:
+# the legacy portfolio->clouds rules plus the new /app/* -> clean-URL rules.
+#
+# Cloudflare Pages preserves query strings automatically, so
+# /app/abnormie?id=1234 lands at /abnormie?id=1234.
+
+# Legacy: /app/portfolio* was renamed to /app/clouds* before the reorg.
+/app/portfolio.html  /app/clouds.html  301
+/app/portfolio       /app/clouds       301
+
+# Reorg: old /app/ URLs map to the new clean URLs.
+/app/mint            /         301
+/app/mint/           /         301
+/app/clouds          /home     301
+/app/clouds/         /home     301
+/app/abnormie        /abnormie  301
