@@ -1,0 +1,180 @@
+  <div class="sample-block">
+    <div class="canvas-frame">
+      <canvas id="sample-canvas" width="320" height="320"></canvas>
+    </div>
+    <div class="sample-meta" id="sample-meta">&nbsp;</div>
+    <div class="sample-controls">
+      <button class="randomize-btn" id="randomize-btn">Randomize ↻</button>
+    </div>
+    <div class="sample-disclaimer">
+      Random example to illustrate the visual language.
+    </div>
+  </div>
+
+  <div class="body">
+    <p>Abnormies is an art project. A constantly evolving on-chain experiment exploring network effects, lack of control, and randomness.</p>
+
+    <p>At face value, Abnormies depict a sky, the weather constantly changing. Behind the scenes all visible details on each Abnormie reflect the actions of others, and those continue to impact and evolve the pieces over time.</p>
+  </div>
+
+  <script>
+  // =============================================================================
+  // Sample viewer - random Abnormie generator.
+  // Uses Math.random() rather than keccak256; visual is plausible, not canonical.
+  // =============================================================================
+
+  const SKY = 0, CIRRUS = 1, ALTOCUMULUS = 2, NIMBOSTRATUS = 3;
+  const COLORS = ['#e3e5e4', '#b0b1b0', '#7c7d7e', '#48494b'];
+  const PIXEL_SIZE = 8;
+
+  const canvas = document.getElementById('sample-canvas');
+  const ctx = canvas.getContext('2d');
+
+  function hashString(str) {
+    let h = 0x811c9dc5;
+    for (let i = 0; i < str.length; i++) {
+      h ^= str.charCodeAt(i);
+      h = Math.imul(h, 0x01000193);
+    }
+    h ^= h >>> 16;
+    h = Math.imul(h, 0x85ebca6b);
+    h ^= h >>> 13;
+    h = Math.imul(h, 0xc2b2ae35);
+    h ^= h >>> 16;
+    return h >>> 0;
+  }
+
+  function mulberry32(seed) {
+    let t = seed >>> 0;
+    return function() {
+      t = (t + 0x6D2B79F5) >>> 0;
+      let r = t;
+      r = Math.imul(r ^ (r >>> 15), r | 1);
+      r ^= r + Math.imul(r ^ (r >>> 7), r | 61);
+      return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  function eventPositions(seedStr, count) {
+    const rng = mulberry32(hashString(seedStr));
+    const positions = [];
+    const seen = new Set();
+    let safety = 0;
+    while (positions.length < count && safety < count * 10) {
+      const p = Math.floor(rng() * 1600);
+      if (!seen.has(p)) {
+        seen.add(p);
+        positions.push(p);
+      }
+      safety++;
+    }
+    return positions;
+  }
+
+  function thunderCount(normieId, idx) {
+    const rng = mulberry32(hashString(`thunder-count-${normieId}-${idx}`));
+    return 5 + Math.floor(rng() * 6);
+  }
+
+  function buildGrid(normieId, transfers, customizations, lightnings, thunders, inverted) {
+    const grid = new Uint8Array(1600);
+
+    function apply(positions, color) {
+      for (const p of positions) {
+        grid[p] = grid[p] === SKY ? color : SKY;
+      }
+    }
+
+    for (let i = 0; i < transfers; i++) {
+      apply(eventPositions(`cirrus-${normieId}-${i}`, 2), CIRRUS);
+    }
+    for (let c = 1; c <= customizations; c++) {
+      apply(eventPositions(`nimbo-source-${normieId}-${c}`, 3), NIMBOSTRATUS);
+    }
+    for (let i = 0; i < lightnings; i++) {
+      apply(eventPositions(`lightning-${normieId}-${i}`, 1), NIMBOSTRATUS);
+    }
+    for (let i = 0; i < thunders; i++) {
+      const n = thunderCount(normieId, i);
+      apply(eventPositions(`thunder-${normieId}-${i}`, n), ALTOCUMULUS);
+    }
+
+    if (inverted) {
+      for (let i = 0; i < grid.length; i++) {
+        const c = grid[i];
+        grid[i] = c === SKY ? NIMBOSTRATUS : c === CIRRUS ? ALTOCUMULUS : c === ALTOCUMULUS ? CIRRUS : SKY;
+      }
+    }
+
+    return grid;
+  }
+
+  function drawGrid(grid) {
+    for (let y = 0; y < 40; y++) {
+      for (let x = 0; x < 40; x++) {
+        const v = grid[y * 40 + x];
+        ctx.fillStyle = COLORS[v];
+        ctx.fillRect(x * PIXEL_SIZE, y * PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE);
+      }
+    }
+  }
+
+  function rollState() {
+    const r = Math.random();
+    if (r < 0.55) return 'living-active-uncust';
+    if (r < 0.75) return 'living-active-cust';
+    if (r < 0.90) return 'dead-active';
+    if (r < 0.97) return 'static-living';
+    return 'static-dead';
+  }
+
+  function generateRandom() {
+    const normieId = Math.floor(Math.random() * 10000);
+    const state = rollState();
+    const inverted = Math.random() < 0.08;
+
+    const isCustomized = state.includes('cust');
+    const isStatic = state.startsWith('static');
+
+    const transfers = 1 + Math.floor(Math.random() * 12);
+    const customizations = isCustomized ? (1 + Math.floor(Math.random() * 28)) : 0;
+    const exposureFactor = isStatic ? 0.3 : 1.0;
+    const lightnings = Math.floor(Math.random() * 12 * exposureFactor);
+    const thunders = Math.floor(Math.random() * 4 * exposureFactor);
+
+    return { normieId, state, transfers, customizations, lightnings, thunders, inverted };
+  }
+
+  function stateLabel(state) {
+    switch (state) {
+      case 'living-active-uncust': return 'Living · Active · Uncustomized';
+      case 'living-active-cust':   return 'Living · Active · Customized';
+      case 'dead-active':          return 'Dead · Active';
+      case 'static-living':        return 'Static · Living';
+      case 'static-dead':          return 'Static · Dead';
+    }
+  }
+
+  function render(spec) {
+    const grid = buildGrid(
+      spec.normieId, spec.transfers, spec.customizations,
+      spec.lightnings, spec.thunders, spec.inverted
+    );
+    drawGrid(grid);
+
+    let metaParts = [
+      `<span class="meta-state">${stateLabel(spec.state)}</span>`
+    ];
+    if (spec.inverted) {
+      metaParts.push('<span class="meta-inverted">Inverted</span>');
+    }
+    document.getElementById('sample-meta').innerHTML = metaParts.join(' &middot; ');
+  }
+
+  function randomize() {
+    render(generateRandom());
+  }
+
+  document.getElementById('randomize-btn').addEventListener('click', randomize);
+  randomize();
+  </script>

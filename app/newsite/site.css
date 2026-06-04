@@ -1,0 +1,360 @@
+/* Abnormies reorganized site — shared stylesheet.
+   Single source of truth for design tokens, the unified header/nav/footer, and
+   the prose pages (index, about, collection). The home and abnormie pages also
+   load the app's styles.css for their wallet/detail components; this file is
+   loaded after it and owns the shared chrome. The @font-face for Robotastic is
+   injected at the top of this file at build time from styles.css. */
+
+:root {
+  --bg: #ece8de;
+  --panel: #f4f1e9;
+  --text: #1c1a17;
+  --muted: #6b665e;
+  --border: #c8c2b3;
+  --accent: #8a4f30;
+
+  --sky: #e3e5e4;
+  --cirrus: #b0b1b0;
+  --altocumulus: #7c7d7e;
+  --nimbostratus: #48494b;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: Georgia, "Iowan Old Style", "Palatino Linotype", Palatino, "Times New Roman", Times, serif;
+  font-size: 17px;
+  line-height: 1.6;
+}
+
+.wrap {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 56px 32px 80px;
+}
+
+@media (max-width: 600px) {
+  .wrap { padding: 40px 20px 56px; }
+  body { font-size: 16px; }
+}
+
+/* Display-face helpers */
+.mono { font-family: ui-monospace, "SF Mono", Consolas, monospace; }
+.display {
+  font-family: 'Robotastic', ui-monospace, monospace;
+  -webkit-font-smoothing: none;
+  -moz-osx-font-smoothing: unset;
+  font-smooth: never;
+  text-rendering: geometricPrecision;
+}
+
+.wordmark {
+  font-family: 'Robotastic', ui-monospace, monospace;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  color: var(--text);
+  -webkit-font-smoothing: none;
+  -moz-osx-font-smoothing: unset;
+  font-smooth: never;
+  text-rendering: geometricPrecision;
+}
+
+/* ---------------------------------------------------------------------------
+   Shared header + nav
+   --------------------------------------------------------------------------- */
+
+.site-header {
+  margin-bottom: 44px;
+}
+
+.site-logo {
+  display: inline-block;
+  text-decoration: none;
+  color: inherit;
+}
+
+.site-logo .wordmark {
+  font-size: 44px;
+  margin-bottom: 14px;
+}
+
+@media (max-width: 600px) {
+  .site-logo .wordmark { font-size: 34px; }
+}
+
+.site-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 22px;
+}
+
+.site-nav a {
+  font-family: 'Robotastic', ui-monospace, monospace;
+  font-size: 13px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  text-decoration: none;
+  padding-bottom: 3px;
+  border-bottom: 1px solid transparent;
+  -webkit-font-smoothing: none;
+  -moz-osx-font-smoothing: unset;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.site-nav a:hover {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.site-nav a.active {
+  color: var(--text);
+  border-bottom-color: var(--text);
+}
+
+/* ---------------------------------------------------------------------------
+   Shared footer
+   --------------------------------------------------------------------------- */
+
+.site-footer {
+  margin-top: 64px;
+  padding-top: 28px;
+  border-top: 1px solid var(--border);
+  text-align: center;
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.site-footer a {
+  color: var(--text);
+  text-decoration: none;
+  border-bottom: 1px solid var(--border);
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.site-footer a:hover {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+/* ---------------------------------------------------------------------------
+   Page title (about, collection, home, detail)
+   --------------------------------------------------------------------------- */
+
+.page-title {
+  font-family: 'Robotastic', ui-monospace, monospace;
+  font-size: 30px;
+  letter-spacing: 0.03em;
+  line-height: 1.1;
+  margin-bottom: 28px;
+  color: var(--text);
+  -webkit-font-smoothing: none;
+  -moz-osx-font-smoothing: unset;
+  font-smooth: never;
+  text-rendering: geometricPrecision;
+}
+
+@media (max-width: 600px) { .page-title { font-size: 26px; } }
+
+/* ---------------------------------------------------------------------------
+   Prose body
+   --------------------------------------------------------------------------- */
+
+.body p {
+  margin-bottom: 1.4em;
+  -webkit-hyphens: none;
+  hyphens: none;
+}
+
+.body p:last-child { margin-bottom: 0; }
+
+.body em { font-style: italic; color: var(--text); }
+
+.body a {
+  color: var(--text);
+  text-decoration: none;
+  border-bottom: 1px solid var(--border);
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.body a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* ---------------------------------------------------------------------------
+   Random example viewer (index)
+   --------------------------------------------------------------------------- */
+
+.sample-block {
+  margin: 48px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.canvas-frame {
+  background: #ffffff;
+  border: 1px solid var(--border);
+  padding: 12px;
+  display: inline-block;
+  line-height: 0;
+}
+
+#sample-canvas {
+  display: block;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+.sample-meta {
+  margin-top: 14px;
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  text-align: center;
+}
+
+.sample-meta .meta-state { color: var(--text); }
+.sample-meta .meta-inverted { color: var(--accent); font-weight: 600; }
+
+.sample-controls { margin-top: 14px; }
+
+.randomize-btn {
+  font-family: 'Robotastic', ui-monospace, monospace;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  background: transparent;
+  border: 1px solid var(--text);
+  color: var(--text);
+  padding: 9px 18px;
+  cursor: pointer;
+  -webkit-font-smoothing: none;
+  -moz-osx-font-smoothing: unset;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.randomize-btn:hover { background: var(--text); color: var(--bg); }
+
+.sample-disclaimer {
+  margin-top: 18px;
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-size: 10px;
+  color: var(--muted);
+  text-align: center;
+  max-width: 380px;
+  line-height: 1.5;
+  letter-spacing: 0.02em;
+}
+
+/* ---------------------------------------------------------------------------
+   FAQ (about)
+   --------------------------------------------------------------------------- */
+
+.section-heading {
+  font-family: 'Robotastic', ui-monospace, monospace;
+  font-size: 16px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text);
+  margin: 48px 0 20px;
+  -webkit-font-smoothing: none;
+  -moz-osx-font-smoothing: unset;
+}
+
+.faq-item { margin-bottom: 22px; }
+
+.faq-q {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.faq-a { color: var(--muted); }
+
+/* ---------------------------------------------------------------------------
+   References block (about) — matches the live index footer reference rows
+   --------------------------------------------------------------------------- */
+
+.refs {
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.8;
+  margin-top: 16px;
+}
+
+.refs .row {
+  display: flex;
+  align-items: baseline;
+  margin-bottom: 6px;
+}
+
+.refs .row:last-child { margin-bottom: 0; }
+
+.refs .label {
+  display: inline-block;
+  width: 130px;
+  flex: none;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 10px;
+}
+
+.refs a {
+  color: var(--text);
+  text-decoration: none;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 1px;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.refs a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+
+.spec-links {
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 28px;
+}
+
+.spec-links a {
+  color: var(--text);
+  text-decoration: none;
+  border-bottom: 1px solid var(--border);
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.spec-links a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* ---------------------------------------------------------------------------
+   Collection page
+   --------------------------------------------------------------------------- */
+
+.opensea-btn {
+  display: inline-block;
+  margin-top: 8px;
+  padding: 14px 22px;
+  background: var(--text);
+  color: var(--bg);
+  font-family: 'Robotastic', ui-monospace, monospace;
+  font-size: 13px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  text-decoration: none;
+  border: 1px solid var(--text);
+  -webkit-font-smoothing: none;
+  -moz-osx-font-smoothing: unset;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.opensea-btn:hover { background: var(--bg); color: var(--text); }

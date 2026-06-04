@@ -1,0 +1,22 @@
+  <h1 class="page-title">Clouds</h1>
+
+  <!-- Wallet bar -->
+  <div class="wallet-bar">
+    <button id="connect-btn" class="btn btn-outline">Connect</button>
+    <div class="wallet-info">
+      <span id="wallet-address" class="wallet-address">Not connected</span>
+    </div>
+    <div class="wallet-meta"></div>
+    <button id="refresh-btn" class="btn btn-outline">Refresh</button>
+  </div>
+
+  <!-- Status banner -->
+  <div id="banner" class="banner" hidden></div>
+
+  <!-- My Abnormies (connected only) -->
+  <section id="receipts-section" class="panel" hidden>
+    <h2>My Abnormies</h2>
+    <p class="section-note">Token IDs and seed Normie pairings are both assigned at reveal. Click any resolved Abnormie to see its detail page.</p>
+    <div id="receipts-list"></div>
+    <div id="receipts-empty" class="empty" hidden>Nothing to show yet.</div>
+  </section>
