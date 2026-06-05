@@ -134,20 +134,47 @@ await mkdir(resolve(newsiteOut, "abi"), { recursive: true });
 const headerTemplate = await readFile(resolve(newsiteSrc, "partials/header.html"), "utf8");
 const footerTemplate = await readFile(resolve(newsiteSrc, "partials/footer.html"), "utf8");
 
-// Primary nav. Labels and route paths are deliberately decoupled: the "Clouds"
-// label points at the /home route (the wallet view).
+// Primary nav. Labels and route paths are deliberately decoupled: the "Login"
+// label points at the /home route (the wallet view). The login item is marked
+// with data-nav-login so the shared header script can swap its label to
+// "My Abnormies" when a wallet is connected.
 const NAV_ITEMS = [
   { key: "about", label: "About", href: "{{BASE}}/about" },
   { key: "collection", label: "Collection", href: "{{BASE}}/collection" },
-  { key: "clouds", label: "Clouds", href: "{{BASE}}/home" }
+  { key: "login", label: "Login", href: "{{BASE}}/home", login: true }
 ];
 
 function buildNav(active) {
   return NAV_ITEMS.map((item) => {
-    const activeAttr = item.key === active ? ' class="active" aria-current="page"' : "";
-    return `<a href="${item.href}"${activeAttr}>${item.label}</a>`;
+    const attrs = [];
+    if (item.key === active) attrs.push('class="active"', 'aria-current="page"');
+    if (item.login) attrs.push("data-nav-login");
+    const a = attrs.length ? ` ${attrs.join(" ")}` : "";
+    return `<a href="${item.href}"${a}>${item.label}</a>`;
   }).join("\n    ");
 }
+
+// Shared header script, injected on every page. Swaps the Login nav label to
+// "My Abnormies" based on the existing injected-wallet connection state — it
+// reads eth_accounts (no prompt), listens to accountsChanged, and to the
+// abnormies:wallet event the /home script dispatches. No new state store.
+const HEADER_SCRIPT = `<script>
+(function () {
+  var el = document.querySelector("[data-nav-login]");
+  if (!el) return;
+  function set(connected) { el.textContent = connected ? "My Abnormies" : "Login"; }
+  var eth = window.ethereum;
+  if (eth && eth.request) {
+    eth.request({ method: "eth_accounts" })
+      .then(function (a) { set(!!(a && a.length)); })
+      .catch(function () {});
+    if (eth.on) eth.on("accountsChanged", function (a) { set(!!(a && a.length)); });
+  }
+  window.addEventListener("abnormies:wallet", function (e) {
+    set(!!(e.detail && e.detail.connected));
+  });
+})();
+</script>`;
 
 // Wrap a page body in the shared document chrome. {{BASE}} tokens anywhere in
 // the result are resolved to BASE_PATH as the final step.
@@ -177,6 +204,7 @@ ${body.trimEnd()}
 ${footerTemplate.trimEnd()}
 
 </div>
+${HEADER_SCRIPT}
 ${scripts ? `${scripts}\n` : ""}</body>
 </html>
 `;
@@ -213,9 +241,9 @@ await writeFile(resolve(newsiteOut, "collection.html"), renderDoc({
 
 // App pages: also load the app stylesheet, the runtime config, and their bundle.
 await writeFile(resolve(newsiteOut, "home.html"), renderDoc({
-  title: "Clouds — Abnormies",
+  title: "My Abnormies",
   description: "Your Abnormies holdings.",
-  active: "clouds",
+  active: "login",
   extraHead: appHead,
   body: await pageBody("home"),
   scripts: '<script src="{{BASE}}/config.js"></script>\n<script type="module" src="{{BASE}}/clouds.js"></script>'

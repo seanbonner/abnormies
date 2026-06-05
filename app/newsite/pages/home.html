@@ -1,4 +1,4 @@
-  <h1 class="page-title">Clouds</h1>
+  <h1 class="page-title">My Abnormies</h1>
 
   <!-- Wallet bar -->
   <div class="wallet-bar">
@@ -13,10 +13,32 @@
   <!-- Status banner -->
   <div id="banner" class="banner" hidden></div>
 
-  <!-- My Abnormies (connected only) -->
+  <!-- Holdings grid (connected wallet) or a shared composite (?ids=...) -->
   <section id="receipts-section" class="panel" hidden>
-    <h2>My Abnormies</h2>
-    <p class="section-note">Token IDs and seed Normie pairings are both assigned at reveal. Click any resolved Abnormie to see its detail page.</p>
+    <p class="section-note">Click any Abnormie to see its detail page.</p>
+
+    <div class="grid-controls" id="grid-controls">
+      <label class="grid-control">
+        <span class="grid-control-label">Columns</span>
+        <select id="cols-select" class="grid-select">
+          <option value="1">1</option>
+          <option value="2">2</option>
+          <option value="3">3</option>
+          <option value="4">4</option>
+          <option value="5">5</option>
+          <option value="6">6</option>
+          <option value="8">8</option>
+          <option value="10">10</option>
+        </select>
+      </label>
+      <label class="grid-control">
+        <input type="checkbox" id="composite-toggle">
+        <span class="grid-control-label">Composite</span>
+      </label>
+      <button id="share-btn" class="btn btn-outline btn-sm">Share</button>
+      <span id="share-status" class="grid-share-status" hidden></span>
+    </div>
+
     <div id="receipts-list"></div>
     <div id="receipts-empty" class="empty" hidden>Nothing to show yet.</div>
   </section>

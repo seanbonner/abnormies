@@ -30,6 +30,26 @@ let account = null;
 let walletChainId = null;
 let listenersAttached = false;
 
+// --- Grid view state + shared-composite mode -------------------------------
+// These features are driven by controls that exist only on the reorganized
+// site's /home page. On the legacy /app/clouds.html page (no #grid-controls)
+// applyGridLayout() no-ops, so that page's behavior is unchanged.
+const ALLOWED_COLS = [1, 2, 3, 4, 5, 6, 8, 10];
+const _params = new URLSearchParams(window.location.search);
+const _idsParam = _params.get("ids");
+// Shared-composite mode: an explicit, wallet-independent set of token IDs to
+// render (ascending). Present only when the URL carries ?ids=...
+const sharedIds = _idsParam
+  ? _idsParam
+      .split(",")
+      .map((s) => parseInt(s.trim(), 10))
+      .filter((n) => Number.isInteger(n) && n >= 0)
+  : null;
+const clampCols = (n) => (ALLOWED_COLS.includes(n) ? n : null);
+let gridCols = clampCols(parseInt(_params.get("cols"), 10)) || 5;
+let gridComposite = _params.get("composite") === "1";
+let displayedIds = []; // resolved token IDs in current display order (ascending)
+
 const $ = (id) => document.getElementById(id);
 const short = (a) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 
@@ -101,11 +121,100 @@ function makeReceiptCell({ resolved, abnormieId, image }) {
 }
 
 // ---------------------------------------------------------------------------
+// Grid layout + controls (reorganized /home only)
+// ---------------------------------------------------------------------------
+function applyGridLayout() {
+  const listEl = $("receipts-list");
+  // Scope the column/composite overrides to the page that actually has the
+  // controls. The legacy clouds page keeps its CSS-driven (and responsive) grid.
+  if (!listEl || !$("grid-controls")) return;
+  listEl.style.gridTemplateColumns = `repeat(${gridCols}, 1fr)`;
+  listEl.classList.toggle("composite", gridComposite);
+}
+
+function buildShareUrl() {
+  const path = cfg.cloudsHref || window.location.pathname;
+  const qs = new URLSearchParams();
+  qs.set("ids", displayedIds.join(","));
+  qs.set("cols", String(gridCols));
+  qs.set("composite", gridComposite ? "1" : "0");
+  return `${window.location.origin}${path}?${qs.toString()}`;
+}
+
+async function copyShareUrl() {
+  const status = $("share-status");
+  const url = buildShareUrl();
+  let ok = false;
+  try {
+    await navigator.clipboard.writeText(url);
+    ok = true;
+  } catch {
+    // Fallback for non-secure contexts where the Clipboard API is unavailable.
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = url;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      ok = document.execCommand("copy");
+      document.body.removeChild(ta);
+    } catch {
+      ok = false;
+    }
+  }
+  if (status) {
+    status.textContent = ok ? "Link copied" : "Copy failed";
+    status.hidden = false;
+  }
+}
+
+function wireGridControls() {
+  const colsSel = $("cols-select");
+  const compToggle = $("composite-toggle");
+  const shareBtn = $("share-btn");
+  const status = $("share-status");
+  const clearStatus = () => { if (status) status.hidden = true; };
+  if (colsSel) {
+    colsSel.value = String(gridCols);
+    colsSel.addEventListener("change", () => {
+      const n = clampCols(parseInt(colsSel.value, 10));
+      if (n) {
+        gridCols = n;
+        applyGridLayout();
+      }
+      clearStatus();
+    });
+  }
+  if (compToggle) {
+    compToggle.checked = gridComposite;
+    compToggle.addEventListener("change", () => {
+      gridComposite = compToggle.checked;
+      applyGridLayout();
+      clearStatus();
+    });
+  }
+  if (shareBtn) shareBtn.addEventListener("click", copyShareUrl);
+}
+
+// Tell the shared header script when the wallet connection state changes, so it
+// can swap the "Login" nav label to "My Abnormies". Reuses the existing
+// injected-wallet flow; no separate state store.
+function notifyWallet(connected) {
+  try {
+    window.dispatchEvent(new CustomEvent("abnormies:wallet", { detail: { connected } }));
+  } catch {
+    /* ignore */
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Init / wallet
 // ---------------------------------------------------------------------------
 async function init() {
   $("connect-btn").addEventListener("click", connect);
   $("refresh-btn").addEventListener("click", refreshAll);
+  wireGridControls();
 
   if (!contractAddress || !isAddress(contractAddress)) {
     showBanner("error", "No contract address configured. Set FRONTEND_CONTRACT_ADDRESS and rebuild.");
@@ -155,6 +264,7 @@ async function setupWallet(addr) {
   await refreshWalletChain();
   attachListeners();
   $("connect-btn").textContent = "Reconnect";
+  notifyWallet(true);
 }
 
 async function refreshWalletChain() {
@@ -174,9 +284,11 @@ function attachListeners() {
       account = null;
       walletClient = null;
       $("connect-btn").textContent = "Connect";
+      notifyWallet(false);
     } else {
       account = getAddress(accs[0]);
       walletClient = createWalletClient({ account, chain, transport: custom(window.ethereum) });
+      notifyWallet(true);
     }
     await refreshAll();
   });
@@ -196,7 +308,66 @@ function renderWalletBar() {
 
 async function refreshAll() {
   renderWalletBar();
-  await loadReceipts();
+  // Shared-composite mode renders the URL's token IDs and needs no wallet.
+  if (sharedIds) {
+    await loadSharedComposite();
+  } else {
+    await loadReceipts();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Shared-composite mode — render an explicit set of token IDs from the URL,
+// ascending, with no wallet connection required. Independent of whoever is
+// (or isn't) connected in the current browser.
+// ---------------------------------------------------------------------------
+async function loadSharedComposite() {
+  const section = $("receipts-section");
+  const listEl = $("receipts-list");
+  const empty = $("receipts-empty");
+  section.hidden = false;
+
+  const ids = [...new Set(sharedIds)].sort((a, b) => a - b);
+  displayedIds = ids;
+
+  if (ids.length === 0) {
+    listEl.innerHTML = "";
+    empty.hidden = false;
+    empty.textContent = "No Abnormies in this composite.";
+    applyGridLayout();
+    return;
+  }
+
+  listEl.innerHTML = "<div class='loading'>Loading Abnormies…</div>";
+  empty.hidden = true;
+
+  const images = {};
+  const calls = ids.map((id) => ({
+    address: contractAddress,
+    abi,
+    functionName: "tokenURI",
+    args: [BigInt(id)]
+  }));
+  let uriResults;
+  try {
+    uriResults = await publicClient.multicall({ contracts: calls });
+  } catch {
+    uriResults = ids.map(() => ({ status: "failure" }));
+  }
+  uriResults.forEach((r, k) => {
+    if (r.status !== "success") return;
+    try {
+      images[ids[k]] = parseTokenURIImage(r.result);
+    } catch {
+      /* fall back to Sky stand-in */
+    }
+  });
+
+  listEl.innerHTML = "";
+  for (const id of ids) {
+    listEl.appendChild(makeReceiptCell({ resolved: true, abnormieId: id, image: images[id] }));
+  }
+  applyGridLayout();
 }
 
 // ---------------------------------------------------------------------------
@@ -233,6 +404,7 @@ async function loadReceipts() {
     listEl.innerHTML = "";
     empty.hidden = false;
     empty.textContent = "Nothing to show yet.";
+    displayedIds = [];
     return;
   }
 
@@ -268,6 +440,10 @@ async function loadReceipts() {
       makeReceiptCell({ resolved: o.resolved, abnormieId: o.abnormieId, image: images[o.abnormieId] })
     );
   }
+  // Resolved token IDs (ascending) are what a Share URL can encode; unresolved
+  // holdings have no token ID yet and are omitted from the shareable set.
+  displayedIds = resolvedIds;
+  applyGridLayout();
 }
 
 window.addEventListener("DOMContentLoaded", () => {
