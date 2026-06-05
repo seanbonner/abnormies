@@ -1,9 +1,19 @@
-# Cloudflare Pages redirect rules.
+# Cloudflare Pages redirect rules — reorganized site (promoted to root).
 #
-# /app/portfolio* was renamed to /app/clouds*; anyone hitting the old URL
-# (stale browser cache, external bookmark, OpenSea description, etc.) gets
-# 301'd to the new page instead of falling into Cloudflare's soft-404 to
-# the teaser index.html.
+# The old /app/ app (mint, clouds, detail) and the legacy portfolio alias all
+# map to the new clean URLs. Cloudflare preserves query strings automatically,
+# so /app/abnormie?id=123 lands at /abnormie?id=123.
 
-/app/portfolio.html  /app/clouds.html  301
-/app/portfolio       /app/clouds       301
+/app/mint            /          301
+/app/mint/           /          301
+/app/clouds          /home      301
+/app/clouds/         /home      301
+/app/clouds.html     /home      301
+/app/portfolio       /home      301
+/app/portfolio.html  /home      301
+/app/abnormie        /abnormie  301
+/app/abnormie.html   /abnormie  301
+
+# The pre-promotion review demo. Anyone on an old /newsitedemo/ link lands on
+# the same page now at the root.
+/newsitedemo/*       /:splat    301
