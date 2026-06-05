@@ -94,6 +94,10 @@ function bootstrap() {
   const expectedChainId = Number(cfg.chainId || 1);
   const chain = CHAINS[expectedChainId] || mainnet;
   const contractAddress = cfg.contractAddress;
+  // Label for the holdings page the back link / post-action message points at.
+  // Configurable so the reorganized site reads "My Abnormies" while the legacy
+  // /app/ build keeps "Clouds".
+  const cloudsLabel = cfg.cloudsLabel || "Clouds";
 
   // Sky-colored (#e3e5e4, the renderer's lightest cloud value) stand-in shown at
   // hero size when an Abnormie has not been revealed yet. Single-rect SVG with an
@@ -711,7 +715,7 @@ function bootstrap() {
       return;
     }
 
-    setFreezeStatus("ok", `${action} confirmed. Returning to Clouds…`);
+    setFreezeStatus("ok", `${action} confirmed. Returning to ${cloudsLabel}…`);
     window.location.href = cfg.cloudsHref || "./clouds.html";
   }
 

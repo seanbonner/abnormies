@@ -127,6 +127,9 @@ for (const file of rootFiles) {
 // derived from this one constant, so nothing else changes on promotion.
 // ---------------------------------------------------------------------------
 const BASE_PATH = process.env.NEWSITE_BASE ?? "/newsitedemo";
+// Canonical origin for absolute social/canonical URLs. Combined with BASE_PATH
+// so og:url stays correct both under /newsitedemo and after promotion to root.
+const ORIGIN = "https://abnormies.art";
 
 const newsiteSrc = resolve(appRoot, "newsite");
 const newsiteOut = resolve(dist, "newsitedemo");
@@ -179,8 +182,19 @@ const HEADER_SCRIPT = `<script>
 
 // Wrap a page body in the shared document chrome. {{BASE}} tokens anywhere in
 // the result are resolved to BASE_PATH as the final step.
-function renderDoc({ title, description, active = null, extraHead = "", body, scripts = "" }) {
+function renderDoc({ title, description, path = "", active = null, extraHead = "", body, scripts = "" }) {
   const header = headerTemplate.replace("{{NAV}}", buildNav(active)).trimEnd();
+  // Social card: title + image only. No description tag, by request — the old
+  // social copy carried launch/minting language that no longer applies.
+  const og = `<meta property="og:type" content="website">
+<meta property="og:url" content="${ORIGIN}{{BASE}}/${path}">
+<meta property="og:title" content="${title}">
+<meta property="og:image" content="${ORIGIN}/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="${title}">
+<meta name="twitter:image" content="${ORIGIN}/og.png">`;
   const doc = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -188,6 +202,7 @@ function renderDoc({ title, description, active = null, extraHead = "", body, sc
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>${title}</title>
 <meta name="description" content="${description}">
+${og}
 ${extraHead}<link rel="stylesheet" href="{{BASE}}/site.css${V}">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="/favicon.ico" sizes="32x32">
@@ -232,7 +247,8 @@ const siteCssContent = `${fontFaceMatch[0]}\n\n${await readFile(resolve(newsiteS
 const newsiteConfig = {
   ...config,
   abnormieHref: `${BASE_PATH}/abnormie`,
-  cloudsHref: `${BASE_PATH}/home`
+  cloudsHref: `${BASE_PATH}/home`,
+  cloudsLabel: "My Abnormies"
 };
 const configContent = `window.ABNORMIES_CONFIG = ${JSON.stringify(newsiteConfig, null, 2)};\n`;
 
@@ -256,6 +272,7 @@ const appHead = `<link rel="stylesheet" href="{{BASE}}/styles.css${V}">\n`;
 await writeFile(resolve(newsiteOut, "index.html"), renderDoc({
   title: "Abnormies",
   description: "A fully on-chain derivative collection paired 1:1 with Normies.",
+  path: "",
   active: null,
   body: await pageBody("index")
 }));
@@ -263,6 +280,7 @@ await writeFile(resolve(newsiteOut, "index.html"), renderDoc({
 await writeFile(resolve(newsiteOut, "about.html"), renderDoc({
   title: "About — Abnormies",
   description: "About Abnormies: a constantly evolving on-chain art experiment.",
+  path: "about",
   active: "about",
   body: await pageBody("about")
 }));
@@ -270,6 +288,7 @@ await writeFile(resolve(newsiteOut, "about.html"), renderDoc({
 await writeFile(resolve(newsiteOut, "collection.html"), renderDoc({
   title: "Collection — Abnormies",
   description: "Browse the full Abnormies collection.",
+  path: "collection",
   active: "collection",
   body: await pageBody("collection")
 }));
@@ -278,6 +297,7 @@ await writeFile(resolve(newsiteOut, "collection.html"), renderDoc({
 await writeFile(resolve(newsiteOut, "home.html"), renderDoc({
   title: "My Abnormies",
   description: "Your Abnormies holdings.",
+  path: "home",
   active: "login",
   extraHead: appHead,
   body: await pageBody("home"),
@@ -287,6 +307,7 @@ await writeFile(resolve(newsiteOut, "home.html"), renderDoc({
 await writeFile(resolve(newsiteOut, "abnormie.html"), renderDoc({
   title: "Abnormie — Detail",
   description: "A single revealed Abnormie and its seed Normie.",
+  path: "abnormie",
   active: null,
   extraHead: appHead,
   body: await pageBody("abnormie"),
@@ -299,8 +320,17 @@ await writeFile(resolve(newsiteOut, "abnormie.html"), renderDoc({
 // for the shared chrome.
 {
   const sharedHeader = headerTemplate.replace("{{NAV}}", buildNav(null)).trimEnd();
+  const specOg = `<meta property="og:type" content="website">
+<meta property="og:url" content="${ORIGIN}{{BASE}}/spec.html">
+<meta property="og:title" content="Abnormies — Specification">
+<meta property="og:image" content="${ORIGIN}/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Abnormies — Specification">
+<meta name="twitter:image" content="${ORIGIN}/og.png">`;
   let spec = await readFile(resolve(repoRoot, "spec.html"), "utf8");
-  spec = spec.replace("</head>", `<link rel="stylesheet" href="{{BASE}}/site.css${V}">\n</head>`);
+  spec = spec.replace("</head>", `${specOg}\n<link rel="stylesheet" href="{{BASE}}/site.css${V}">\n</head>`);
   spec = spec.replace(/<a href="index\.html" class="back-link">[^<]*<\/a>/, sharedHeader);
   spec = spec.replace(
     /<hr class="footer-rule">[\s\S]*?<div class="footer">[\s\S]*?<\/div>/,
