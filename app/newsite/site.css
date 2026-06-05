@@ -409,12 +409,14 @@ body {
   cursor: pointer;
 }
 
-.grid-share-status {
-  color: var(--text);
-  letter-spacing: 0.04em;
-}
+/* Column count is driven by --abn-cols (set by clouds.js) instead of an inline
+   grid-template-columns, so the mobile media query below can override it. The
+   selector value the user picked is preserved; only the rendered columns cap. */
+#receipts-list { grid-template-columns: repeat(var(--abn-cols, 5), 1fr); }
 
-.grid-share-status[hidden] { display: none; }
+@media (max-width: 600px) {
+  #receipts-list { grid-template-columns: repeat(3, 1fr); }
+}
 
 /* Composite mode: tiles edge-to-edge, no gutters, no labels or borders, so the
    grid reads as a single image made of N tiles. */

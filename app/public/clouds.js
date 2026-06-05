@@ -128,7 +128,10 @@ function applyGridLayout() {
   // Scope the column/composite overrides to the page that actually has the
   // controls. The legacy clouds page keeps its CSS-driven (and responsive) grid.
   if (!listEl || !$("grid-controls")) return;
-  listEl.style.gridTemplateColumns = `repeat(${gridCols}, 1fr)`;
+  // Set the column count as a CSS custom property rather than an inline
+  // grid-template-columns, so the site.css mobile media query can cap the
+  // rendered columns at 3 under 600px while the selector keeps the user's value.
+  listEl.style.setProperty("--abn-cols", String(gridCols));
   listEl.classList.toggle("composite", gridComposite);
 }
 
@@ -141,8 +144,9 @@ function buildShareUrl() {
   return `${window.location.origin}${path}?${qs.toString()}`;
 }
 
+let shareResetTimer = null;
 async function copyShareUrl() {
-  const status = $("share-status");
+  const btn = $("share-btn");
   const url = buildShareUrl();
   let ok = false;
   try {
@@ -163,9 +167,13 @@ async function copyShareUrl() {
       ok = false;
     }
   }
-  if (status) {
-    status.textContent = ok ? "Link copied" : "Copy failed";
-    status.hidden = false;
+  // Brief visual confirmation: flip the button label, restore it after 2s.
+  if (btn) {
+    btn.textContent = ok ? "Copied" : "Copy failed";
+    if (shareResetTimer) clearTimeout(shareResetTimer);
+    shareResetTimer = setTimeout(() => {
+      btn.textContent = "Share";
+    }, 2000);
   }
 }
 
@@ -173,8 +181,6 @@ function wireGridControls() {
   const colsSel = $("cols-select");
   const compToggle = $("composite-toggle");
   const shareBtn = $("share-btn");
-  const status = $("share-status");
-  const clearStatus = () => { if (status) status.hidden = true; };
   if (colsSel) {
     colsSel.value = String(gridCols);
     colsSel.addEventListener("change", () => {
@@ -183,7 +189,6 @@ function wireGridControls() {
         gridCols = n;
         applyGridLayout();
       }
-      clearStatus();
     });
   }
   if (compToggle) {
@@ -191,7 +196,6 @@ function wireGridControls() {
     compToggle.addEventListener("change", () => {
       gridComposite = compToggle.checked;
       applyGridLayout();
-      clearStatus();
     });
   }
   if (shareBtn) shareBtn.addEventListener("click", copyShareUrl);
