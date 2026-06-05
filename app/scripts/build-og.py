@@ -51,25 +51,20 @@ draw.rectangle(
     outline=TEXT, width=1,
 )
 
-# Right half: wordmark + tagline + status.
+# Right half: wordmark + tagline, vertically centered against the grid. No
+# phase/mint status line — the collection is fully launched, so the card stays
+# evergreen with nothing left to go stale.
 TEXT_X = GRID_X + GRID_W + 90
 
 title_font = ImageFont.truetype("/System/Library/Fonts/Supplemental/Courier New Bold.ttf", 92)
 sub_font = ImageFont.truetype("/System/Library/Fonts/Supplemental/Georgia.ttf", 30)
-status_font = ImageFont.truetype("/System/Library/Fonts/Supplemental/Courier New Bold.ttf", 22)
 
-draw.text((TEXT_X, GRID_Y + 20), "ABNORMIES", font=title_font, fill=TEXT)
+draw.text((TEXT_X, GRID_Y + 125), "ABNORMIES", font=title_font, fill=TEXT)
 
 draw.text(
-    (TEXT_X, GRID_Y + 140),
+    (TEXT_X, GRID_Y + 245),
     "A fully on-chain art\ncollection paired 1:1\nwith Normies.",
     font=sub_font, fill=MUTED, spacing=10,
-)
-
-draw.text(
-    (TEXT_X, GRID_Y + GRID_W - 32),
-    "PHASE II · MINT OPEN",
-    font=status_font, fill=ACCENT,
 )
 
 # Write to site repo root (one dir up from app/, then one more for site/).

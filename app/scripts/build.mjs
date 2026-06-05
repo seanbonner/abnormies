@@ -189,12 +189,12 @@ function renderDoc({ title, description, path = "", active = null, extraHead = "
   const og = `<meta property="og:type" content="website">
 <meta property="og:url" content="${ORIGIN}{{BASE}}/${path}">
 <meta property="og:title" content="${title}">
-<meta property="og:image" content="${ORIGIN}/og.png">
+<meta property="og:image" content="${ORIGIN}/og.png${ogV}">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="${title}">
-<meta name="twitter:image" content="${ORIGIN}/og.png">`;
+<meta name="twitter:image" content="${ORIGIN}/og.png${ogV}">`;
   const doc = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -266,6 +266,11 @@ const BUILDID = createHash("sha256")
   .slice(0, 10);
 const V = `?v=${BUILDID}`;
 
+// Separate version for the social image: X / Discord cache og:image by URL, so
+// a content-hashed query makes the new card pull through. Kept distinct from V
+// so a CSS/JS change doesn't needlessly invalidate the cached social image.
+const ogV = `?v=${createHash("sha256").update(await readFile(resolve(repoRoot, "og.png"))).digest("hex").slice(0, 10)}`;
+
 const appHead = `<link rel="stylesheet" href="{{BASE}}/styles.css${V}">\n`;
 
 // Prose pages.
@@ -323,12 +328,12 @@ await writeFile(resolve(newsiteOut, "abnormie.html"), renderDoc({
   const specOg = `<meta property="og:type" content="website">
 <meta property="og:url" content="${ORIGIN}{{BASE}}/spec.html">
 <meta property="og:title" content="Abnormies — Specification">
-<meta property="og:image" content="${ORIGIN}/og.png">
+<meta property="og:image" content="${ORIGIN}/og.png${ogV}">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Abnormies — Specification">
-<meta name="twitter:image" content="${ORIGIN}/og.png">`;
+<meta name="twitter:image" content="${ORIGIN}/og.png${ogV}">`;
   let spec = await readFile(resolve(repoRoot, "spec.html"), "utf8");
   spec = spec.replace("</head>", `${specOg}\n<link rel="stylesheet" href="{{BASE}}/site.css${V}">\n</head>`);
   spec = spec.replace(/<a href="index\.html" class="back-link">[^<]*<\/a>/, sharedHeader);
