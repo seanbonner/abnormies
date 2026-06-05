@@ -17,6 +17,7 @@
 // /app/abnormie.html.
 
 import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as esbuild from "esbuild";
@@ -187,7 +188,7 @@ function renderDoc({ title, description, active = null, extraHead = "", body, sc
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>${title}</title>
 <meta name="description" content="${description}">
-${extraHead}<link rel="stylesheet" href="{{BASE}}/site.css">
+${extraHead}<link rel="stylesheet" href="{{BASE}}/site.css${V}">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="/favicon.ico" sizes="32x32">
 </head>
@@ -215,7 +216,41 @@ async function pageBody(name) {
   return readFile(resolve(newsiteSrc, "pages", `${name}.html`), "utf8");
 }
 
-const appHead = `<link rel="stylesheet" href="{{BASE}}/styles.css">\n`;
+// --- Asset contents + cache-busting version --------------------------------
+// Cloudflare serves CSS/JS with a multi-hour max-age, so without a versioned
+// URL a reviewer who visited an earlier build keeps the stale asset until the
+// cache expires. The HTML is always revalidated, so referencing each asset as
+// <name>?v=<hash> means any change to an asset produces a new URL the browser
+// has to fetch — updates land immediately, no hard reload needed. The version
+// is a content hash of every cache-sensitive asset, so it only changes when one
+// of them changes.
+const stylesCssSrc = await readFile(resolve(publicDir, "styles.css"), "utf8");
+const fontFaceMatch = stylesCssSrc.match(/@font-face\s*\{[\s\S]*?\}/);
+if (!fontFaceMatch) throw new Error("Could not extract @font-face from styles.css");
+const siteCssContent = `${fontFaceMatch[0]}\n\n${await readFile(resolve(newsiteSrc, "site.css"), "utf8")}`;
+
+const newsiteConfig = {
+  ...config,
+  abnormieHref: `${BASE_PATH}/abnormie`,
+  cloudsHref: `${BASE_PATH}/home`
+};
+const configContent = `window.ABNORMIES_CONFIG = ${JSON.stringify(newsiteConfig, null, 2)};\n`;
+
+const appStylesContent = await readFile(resolve(appOut, "styles.css"), "utf8");
+const cloudsBundle = await readFile(resolve(appOut, "clouds.js"), "utf8");
+const abnormieBundle = await readFile(resolve(appOut, "abnormie.js"), "utf8");
+
+const BUILDID = createHash("sha256")
+  .update(siteCssContent)
+  .update(appStylesContent)
+  .update(cloudsBundle)
+  .update(abnormieBundle)
+  .update(configContent)
+  .digest("hex")
+  .slice(0, 10);
+const V = `?v=${BUILDID}`;
+
+const appHead = `<link rel="stylesheet" href="{{BASE}}/styles.css${V}">\n`;
 
 // Prose pages.
 await writeFile(resolve(newsiteOut, "index.html"), renderDoc({
@@ -246,7 +281,7 @@ await writeFile(resolve(newsiteOut, "home.html"), renderDoc({
   active: "login",
   extraHead: appHead,
   body: await pageBody("home"),
-  scripts: '<script src="{{BASE}}/config.js"></script>\n<script type="module" src="{{BASE}}/clouds.js"></script>'
+  scripts: `<script src="{{BASE}}/config.js${V}"></script>\n<script type="module" src="{{BASE}}/clouds.js${V}"></script>`
 }));
 
 await writeFile(resolve(newsiteOut, "abnormie.html"), renderDoc({
@@ -255,7 +290,7 @@ await writeFile(resolve(newsiteOut, "abnormie.html"), renderDoc({
   active: null,
   extraHead: appHead,
   body: await pageBody("abnormie"),
-  scripts: '<script src="{{BASE}}/config.js"></script>\n<script type="module" src="{{BASE}}/abnormie.js"></script>'
+  scripts: `<script src="{{BASE}}/config.js${V}"></script>\n<script type="module" src="{{BASE}}/abnormie.js${V}"></script>`
 }));
 
 // Spec: keep the existing document and its body intact, inject the shared
@@ -265,7 +300,7 @@ await writeFile(resolve(newsiteOut, "abnormie.html"), renderDoc({
 {
   const sharedHeader = headerTemplate.replace("{{NAV}}", buildNav(null)).trimEnd();
   let spec = await readFile(resolve(repoRoot, "spec.html"), "utf8");
-  spec = spec.replace("</head>", '<link rel="stylesheet" href="{{BASE}}/site.css">\n</head>');
+  spec = spec.replace("</head>", `<link rel="stylesheet" href="{{BASE}}/site.css${V}">\n</head>`);
   spec = spec.replace(/<a href="index\.html" class="back-link">[^<]*<\/a>/, sharedHeader);
   spec = spec.replace(
     /<hr class="footer-rule">[\s\S]*?<div class="footer">[\s\S]*?<\/div>/,
@@ -275,13 +310,12 @@ await writeFile(resolve(newsiteOut, "abnormie.html"), renderDoc({
 }
 await cp(resolve(repoRoot, "spec.md"), resolve(newsiteOut, "spec.md"));
 
-// Shared stylesheet: prepend the @font-face rule extracted from the app's
-// styles.css so Robotastic stays defined in exactly one place.
-const stylesCss = await readFile(resolve(publicDir, "styles.css"), "utf8");
-const fontFaceMatch = stylesCss.match(/@font-face\s*\{[\s\S]*?\}/);
-if (!fontFaceMatch) throw new Error("Could not extract @font-face from styles.css");
-const siteCssSrc = await readFile(resolve(newsiteSrc, "site.css"), "utf8");
-await writeFile(resolve(newsiteOut, "site.css"), `${fontFaceMatch[0]}\n\n${siteCssSrc}`);
+// Write the cache-busted assets. Contents were produced above so the version
+// hash could be computed before the pages were rendered. The shared stylesheet
+// carries the @font-face rule extracted from styles.css, so Robotastic stays
+// defined in exactly one place.
+await writeFile(resolve(newsiteOut, "site.css"), siteCssContent);
+await writeFile(resolve(newsiteOut, "config.js"), configContent);
 
 // App assets the home/abnormie pages need at runtime. The bundles are the same
 // ones the live /app/ build emits; behavior diverges only via config.js, which
@@ -292,17 +326,7 @@ await cp(resolve(appOut, "abnormie.js"), resolve(newsiteOut, "abnormie.js"));
 await cp(resolve(appOut, "abi/Abnormies.json"), resolve(newsiteOut, "abi/Abnormies.json"));
 await cp(resolve(appOut, "abi/Normies.json"), resolve(newsiteOut, "abi/Normies.json"));
 
-const newsiteConfig = {
-  ...config,
-  abnormieHref: `${BASE_PATH}/abnormie`,
-  cloudsHref: `${BASE_PATH}/home`
-};
-await writeFile(
-  resolve(newsiteOut, "config.js"),
-  `window.ABNORMIES_CONFIG = ${JSON.stringify(newsiteConfig, null, 2)};\n`
-);
-
-console.log(`Built dist/newsitedemo/ with BASE_PATH "${BASE_PATH}".`);
+console.log(`Built dist/newsitedemo/ with BASE_PATH "${BASE_PATH}" (assets ?v=${BUILDID}).`);
 
 if (!config.contractAddress) {
   console.warn("WARNING: FRONTEND_CONTRACT_ADDRESS is empty. The app will show a config error until rebuilt with it set.");
