@@ -462,6 +462,21 @@ a.receipt-cell:hover .receipt-thumb { border-color: var(--accent); }
 .foot a, .section-note a { color: var(--text); text-decoration: none; border-bottom: 1px solid var(--border); }
 .foot a:hover, .section-note a:hover { color: var(--accent); border-bottom-color: var(--accent); }
 
+/* Resync banner: a single section-note line whose action ("Resync now") is a
+   button styled to read as the same inline link as .section-note a. */
+.resync-banner[hidden] { display: none; }
+.resync-link {
+  font: inherit;
+  padding: 0;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  cursor: pointer;
+}
+.resync-link:hover { color: var(--accent); border-bottom-color: var(--accent); }
+.resync-link:disabled { color: var(--muted); cursor: default; border-bottom-color: var(--border); }
+
 /* ===========================================================================
    Abnormie detail page (abnormie.html). Extends the shared palette and
    typography above; reuses .panel, .btn, .banner, .empty. The detail page is
