@@ -96,6 +96,19 @@ function hideBanner() {
   $("banner").hidden = true;
 }
 
+// Set the holdings note to reflect the wallet's count. Only present on the
+// /home page (the element carries id="holdings-note"); a no-op elsewhere. A
+// zero count restores the generic prompt.
+const DEFAULT_HOLDINGS_NOTE = "Click any Abnormie to see its detail page.";
+function setHoldingsNote(count) {
+  const note = $("holdings-note");
+  if (!note) return;
+  note.textContent =
+    count > 0
+      ? `You own ${count} ${count === 1 ? "Abnormie" : "Abnormies"}. Click any one to see its detail page.`
+      : DEFAULT_HOLDINGS_NOTE;
+}
+
 // Sky-colored stand-in for unrevealed Abnormies (matches main.js).
 function skyThumb(className) {
   const ns = "http://www.w3.org/2000/svg";
@@ -436,6 +449,7 @@ async function loadReceipts() {
   if (!account) {
     section.hidden = true;
     hideStaleBanner();
+    setHoldingsNote(0);
     return;
   }
   section.hidden = false;
@@ -453,6 +467,7 @@ async function loadReceipts() {
     listEl.innerHTML = "";
     empty.hidden = false;
     empty.textContent = "Could not load Abnormies.";
+    setHoldingsNote(0);
     return;
   }
 
@@ -461,8 +476,11 @@ async function loadReceipts() {
     empty.hidden = false;
     empty.textContent = "Nothing to show yet.";
     displayedIds = [];
+    setHoldingsNote(0);
     return;
   }
+
+  setHoldingsNote(owned.length);
 
   // Fetch images for resolved holdings in one multicall.
   const resolvedIds = owned.filter((o) => o.resolved).map((o) => o.abnormieId);
