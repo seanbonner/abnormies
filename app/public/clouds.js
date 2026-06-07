@@ -98,7 +98,7 @@ let gridView = readInitialView();
 const ALLOWED_ANIM_TYPES = ["random", "snake", "single"];
 const ALLOWED_ANIM_SPEEDS = ["slow", "medium", "fast"];
 let animType = ALLOWED_ANIM_TYPES.includes(_params.get("type")) ? _params.get("type") : "random";
-let animSpeed = ALLOWED_ANIM_SPEEDS.includes(_params.get("speed")) ? _params.get("speed") : "slow";
+let animSpeed = ALLOWED_ANIM_SPEEDS.includes(_params.get("speed")) ? _params.get("speed") : "fast";
 
 // Speed presets shared across all three animated sub-modes. Slow crossfades
 // (1500ms) with a per-tile random stagger (0 to 1800ms); Medium and Fast hard
@@ -525,7 +525,7 @@ function wireGridControls() {
   if (speedSel) {
     speedSel.value = animSpeed;
     speedSel.addEventListener("change", () => {
-      animSpeed = ALLOWED_ANIM_SPEEDS.includes(speedSel.value) ? speedSel.value : "slow";
+      animSpeed = ALLOWED_ANIM_SPEEDS.includes(speedSel.value) ? speedSel.value : "fast";
       if (gridView === "animated") startAnimation();
     });
   }
