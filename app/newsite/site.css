@@ -442,26 +442,24 @@ body {
 #receipts-list.composite .receipt-thumb { border: none; }
 
 /* ---------------------------------------------------------------------------
-   Animated view (home only). The stage is one responsive square bounding box;
-   every sub-mode (Random, Snake, Single) fills the exact same box, so switching
-   Type never reflows the page. The square is capped at the container width, the
-   same width Composite occupies. Absent on the legacy clouds page (no stage).
+   Animated view (home only). Abnormies are fixed 40x40 art and must never be
+   distorted, so every animated tile is locked to a 1x1 square (just like
+   Composite static). Random and Snake lay out square tiles in --abn-cols
+   columns and let the grid take its natural height; Single is one square canvas
+   at the container width. Picking a column count that does not divide the
+   holdings evenly just leaves a partial last row, same as Composite. Absent on
+   the legacy clouds page (no stage).
    --------------------------------------------------------------------------- */
 .animated-stage {
   position: relative;
   width: 100%;
-  aspect-ratio: 1;
-  overflow: hidden;
 }
 
 /* Random and Snake reuse the Composite layout: gutterless, label-free, driven
-   by --abn-cols. grid-auto-rows: 1fr stretches the rows to fill the square. */
+   by --abn-cols. Rows size to the square tiles, so the grid height is natural. */
 .anim-grid {
   display: grid;
   grid-template-columns: repeat(var(--abn-cols, 5), 1fr);
-  grid-auto-rows: 1fr;
-  width: 100%;
-  height: 100%;
   gap: 0;
 }
 
@@ -469,15 +467,16 @@ body {
   .anim-grid { grid-template-columns: repeat(3, 1fr); }
 }
 
+/* Every tile is a 1x1 square. The two crossfade layers fill it absolutely. */
 .anim-cell {
   position: relative;
   width: 100%;
-  height: 100%;
+  aspect-ratio: 1;
   overflow: hidden;
 }
 
-/* Single fills the whole square with one canvas. */
-.anim-single { width: 100%; height: 100%; }
+/* Single is one square canvas filling the container width. */
+.anim-single { width: 100%; }
 
 /* Dual-layer crossfade. Each cell stacks two layers; the active one carries
    .visible. The 1500ms opacity transition applies only when the stage carries
