@@ -425,6 +425,11 @@ body {
    selector value the user picked is preserved; only the rendered columns cap. */
 #receipts-list { grid-template-columns: repeat(var(--abn-cols, 5), 1fr); }
 
+/* The display:grid rule outranks the UA [hidden] rule by ID specificity, so the
+   static grid needs this to actually hide in the animated view (otherwise the
+   stage renders below a still-visible grid). */
+#receipts-list[hidden] { display: none; }
+
 @media (max-width: 600px) {
   #receipts-list { grid-template-columns: repeat(3, 1fr); }
 }
