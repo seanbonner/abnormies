@@ -384,6 +384,17 @@ body {
   gap: 8px;
 }
 
+/* The display rule above outranks the UA [hidden] rule, so the animated
+   sub-controls need this to actually hide when not in the animated view. */
+.grid-control[hidden] { display: none; }
+
+/* Share sits on its own row below the grid, centered. */
+.share-row {
+  display: flex;
+  justify-content: center;
+  margin-top: 22px;
+}
+
 .grid-control-label {
   letter-spacing: 0.04em;
   text-transform: uppercase;
