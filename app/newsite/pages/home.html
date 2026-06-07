@@ -17,6 +17,14 @@
 
     <div class="grid-controls" id="grid-controls">
       <label class="grid-control">
+        <span class="grid-control-label">View</span>
+        <select id="view-select" class="grid-select">
+          <option value="grid">Grid</option>
+          <option value="composite">Composite</option>
+          <option value="animated">Animated</option>
+        </select>
+      </label>
+      <label class="grid-control">
         <span class="grid-control-label">Columns</span>
         <select id="cols-select" class="grid-select">
           <option value="1">1</option>
@@ -29,14 +37,30 @@
           <option value="10">10</option>
         </select>
       </label>
-      <label class="grid-control">
-        <input type="checkbox" id="composite-toggle">
-        <span class="grid-control-label">Composite</span>
+      <label class="grid-control anim-control" id="type-control" hidden>
+        <span class="grid-control-label">Type</span>
+        <select id="type-select" class="grid-select">
+          <option value="random">Random</option>
+          <option value="snake">Snake</option>
+          <option value="single">Single</option>
+        </select>
+      </label>
+      <label class="grid-control anim-control" id="speed-control" hidden>
+        <span class="grid-control-label">Speed</span>
+        <select id="speed-select" class="grid-select">
+          <option value="slow">Slow</option>
+          <option value="medium">Medium</option>
+          <option value="fast">Fast</option>
+        </select>
       </label>
       <button id="share-btn" class="btn btn-outline btn-sm">Share</button>
     </div>
 
     <p id="resync-banner" class="section-note resync-banner" hidden>Some of your seed Normies have activity that isn't reflected on your Abnormies yet. <button type="button" id="resync-btn" class="resync-link">Resync now</button></p>
     <div id="receipts-list"></div>
+    <!-- Animated view stage. A single responsive square bounding box that every
+         animated sub-mode (Random, Snake, Single) fills, so switching Type never
+         reflows the page. Purely visual: no links, no labels, not clickable. -->
+    <div id="animated-stage" class="animated-stage" hidden aria-hidden="true"></div>
     <div id="receipts-empty" class="empty" hidden>Nothing to show yet.</div>
   </section>

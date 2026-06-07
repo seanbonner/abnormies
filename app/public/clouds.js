@@ -66,7 +66,7 @@ let resyncInFlight = false;
 // --- Grid view state + shared-composite mode -------------------------------
 // These features are driven by controls that exist only on the reorganized
 // site's /home page. On the legacy /app/clouds.html page (no #grid-controls)
-// applyGridLayout() no-ops, so that page's behavior is unchanged.
+// applyView() / applyGridLayout() no-op, so that page's behavior is unchanged.
 const ALLOWED_COLS = [1, 2, 3, 4, 5, 6, 8, 10];
 const _params = new URLSearchParams(window.location.search);
 const _idsParam = _params.get("ids");
@@ -80,8 +80,58 @@ const sharedIds = _idsParam
   : null;
 const clampCols = (n) => (ALLOWED_COLS.includes(n) ? n : null);
 let gridCols = clampCols(parseInt(_params.get("cols"), 10)) || 5;
-let gridComposite = _params.get("composite") === "1";
 let displayedIds = []; // resolved token IDs in current display order (ascending)
+
+// Three-way view selector: "grid" (default), "composite", "animated". Replaces
+// the old boolean composite toggle; legacy ?composite=1 links still resolve to
+// the composite view.
+const ALLOWED_VIEWS = ["grid", "composite", "animated"];
+function readInitialView() {
+  const v = _params.get("view");
+  if (ALLOWED_VIEWS.includes(v)) return v;
+  if (_params.get("composite") === "1") return "composite";
+  return "grid";
+}
+let gridView = readInitialView();
+
+// Animated sub-controls (only meaningful when gridView === "animated").
+const ALLOWED_ANIM_TYPES = ["random", "snake", "single"];
+const ALLOWED_ANIM_SPEEDS = ["slow", "medium", "fast"];
+let animType = ALLOWED_ANIM_TYPES.includes(_params.get("type")) ? _params.get("type") : "random";
+let animSpeed = ALLOWED_ANIM_SPEEDS.includes(_params.get("speed")) ? _params.get("speed") : "slow";
+
+// Speed presets shared across all three animated sub-modes. Slow crossfades
+// (1500ms) with a per-tile random stagger (0 to 1800ms); Medium and Fast hard
+// cut with no stagger.
+const SPEED_PRESETS = {
+  slow: { tick: 2500, crossfade: true, stagger: 1800 },
+  medium: { tick: 600, crossfade: false, stagger: 0 },
+  fast: { tick: 50, crossfade: false, stagger: 0 }
+};
+
+// Rendered tiles for the current data set, token ID ascending then unresolved,
+// matching Composite static order. Each: { id, resolved, image }.
+let tiles = [];
+
+// Animation runtime state.
+let animTimer = null;     // setInterval handle for the tick loop
+let animCellTimers = [];  // pending per-tile stagger setTimeouts (Slow only)
+let animOrder = [];       // grid-position index -> tile index (Random/Snake)
+let animCells = [];       // .anim-cell DOM nodes in grid order
+let animActiveLayer = []; // per-cell index of the currently visible layer (0|1)
+let singlePerm = [];      // random permutation of tile indices (Single)
+let singlePos = 0;        // cursor into singlePerm (Single)
+
+// Fisher-Yates in place.
+function fisherYates(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const tmp = arr[i];
+    arr[i] = arr[j];
+    arr[j] = tmp;
+  }
+  return arr;
+}
 
 const $ = (id) => document.getElementById(id);
 const short = (a) => `${a.slice(0, 6)}…${a.slice(-4)}`;
@@ -178,7 +228,219 @@ function applyGridLayout() {
   // grid-template-columns, so the site.css mobile media query can cap the
   // rendered columns at 3 under 600px while the selector keeps the user's value.
   listEl.style.setProperty("--abn-cols", String(gridCols));
-  listEl.classList.toggle("composite", gridComposite);
+  // The static list reads as a composite (gutterless, label-free) only in the
+  // Composite view; Grid keeps the default gapped layout.
+  listEl.classList.toggle("composite", gridView === "composite");
+}
+
+// ---------------------------------------------------------------------------
+// View switching (reorganized /home only)
+// ---------------------------------------------------------------------------
+// Reflect the current view: show the right container, toggle the animated
+// sub-controls, and start or stop the animation. Safe to call repeatedly.
+function applyView() {
+  const listEl = $("receipts-list");
+  const stage = $("animated-stage");
+  // Legacy clouds page (no controls): leave its CSS-driven grid untouched.
+  if (!listEl || !$("grid-controls")) return;
+
+  applyGridLayout();
+
+  const animated = gridView === "animated";
+  const typeCtl = $("type-control");
+  const speedCtl = $("speed-control");
+  if (typeCtl) typeCtl.hidden = !animated;
+  if (speedCtl) speedCtl.hidden = !animated;
+
+  if (!animated) {
+    stopAnimation();
+    if (stage) stage.hidden = true;
+    listEl.hidden = false;
+    return;
+  }
+
+  // Animated view: hide the static list, show the stage, (re)build and run.
+  // With no tiles (still loading or empty holdings) keep the square collapsed.
+  listEl.hidden = true;
+  if (stage) stage.hidden = tiles.length === 0;
+  startAnimation();
+}
+
+// ---------------------------------------------------------------------------
+// Animation engine. All sub-modes start on load, loop indefinitely, and have
+// no stop toggle. No on-chain state is refreshed during animation.
+// ---------------------------------------------------------------------------
+function stopAnimation() {
+  if (animTimer) {
+    clearInterval(animTimer);
+    animTimer = null;
+  }
+  for (const t of animCellTimers) clearTimeout(t);
+  animCellTimers = [];
+}
+
+function startAnimation() {
+  stopAnimation();
+  const stage = $("animated-stage");
+  if (!stage) return;
+  // Nothing to animate yet (data still loading or empty holdings).
+  if (!tiles.length) {
+    stage.replaceChildren();
+    return;
+  }
+  const preset = SPEED_PRESETS[animSpeed] || SPEED_PRESETS.slow;
+  // The 1500ms opacity transition is gated by this class so Medium/Fast hard cut.
+  stage.classList.toggle("crossfade", preset.crossfade);
+
+  if (animType === "single") {
+    buildSingleStage();
+  } else {
+    buildGridStage();
+  }
+
+  // The starting frame (built above) holds for one interval, then the loop runs
+  // forever at the preset tick.
+  animTimer = setInterval(() => tick(preset), preset.tick);
+}
+
+// Build the visual content for an animated tile: the same render Composite uses
+// (the token image, or the Sky stand-in for an unrevealed holding). Animated
+// tiles are purely visual: no anchor, no label, not clickable.
+function makeTileContent(tile) {
+  if (tile && tile.resolved && tile.image) {
+    const img = document.createElement("img");
+    img.className = "anim-thumb";
+    img.src = tile.image;
+    img.alt = "";
+    img.setAttribute("aria-hidden", "true");
+    return img;
+  }
+  return skyThumb("anim-thumb");
+}
+
+// Two stacked layers per cell so a content change can crossfade: set the
+// incoming layer first, then flip .visible (Slow). Medium/Fast carry no
+// transition, so the visible layer is just repainted in place.
+function makeCell(extraClass) {
+  const cell = document.createElement("div");
+  cell.className = extraClass ? `anim-cell ${extraClass}` : "anim-cell";
+  cell.appendChild(Object.assign(document.createElement("div"), { className: "anim-layer" }));
+  cell.appendChild(Object.assign(document.createElement("div"), { className: "anim-layer" }));
+  return cell;
+}
+
+// Paint a cell's starting frame instantly into layer 0 (no crossfade/stagger).
+function paintCellInstant(cellIndex, tileIndex) {
+  const layers = animCells[cellIndex].children;
+  layers[0].replaceChildren(makeTileContent(tiles[tileIndex]));
+  layers[0].classList.add("visible");
+  layers[1].classList.remove("visible");
+  layers[1].replaceChildren();
+  animActiveLayer[cellIndex] = 0;
+}
+
+// Paint a cell during a tick. Slow: set the inactive layer's content, then flip
+// visibility so the old layer fades out as the new fades in. Medium/Fast: hard
+// cut by repainting the visible layer in place.
+function paintCell(cellIndex, tileIndex, preset) {
+  const layers = animCells[cellIndex].children;
+  if (preset.crossfade) {
+    const activeIdx = animActiveLayer[cellIndex];
+    const inactiveIdx = activeIdx === 0 ? 1 : 0;
+    layers[inactiveIdx].replaceChildren(makeTileContent(tiles[tileIndex]));
+    layers[inactiveIdx].classList.add("visible");
+    layers[activeIdx].classList.remove("visible");
+    animActiveLayer[cellIndex] = inactiveIdx;
+  } else {
+    layers[animActiveLayer[cellIndex]].replaceChildren(makeTileContent(tiles[tileIndex]));
+  }
+}
+
+function buildGridStage() {
+  const stage = $("animated-stage");
+  const grid = document.createElement("div");
+  grid.className = "anim-grid";
+  grid.style.setProperty("--abn-cols", String(gridCols));
+  animCells = [];
+  animActiveLayer = [];
+  for (let i = 0; i < tiles.length; i++) {
+    const cell = makeCell();
+    grid.appendChild(cell);
+    animCells.push(cell);
+    animActiveLayer.push(0);
+  }
+  stage.replaceChildren(grid);
+  // Initial order: identity (token ID ascending, matching Composite static).
+  animOrder = tiles.map((_, i) => i);
+  for (let i = 0; i < animCells.length; i++) paintCellInstant(i, animOrder[i]);
+}
+
+function buildSingleStage() {
+  const stage = $("animated-stage");
+  const cell = makeCell("anim-single");
+  stage.replaceChildren(cell);
+  animCells = [cell];
+  animActiveLayer = [0];
+  singlePerm = tiles.map((_, i) => i);
+  fisherYates(singlePerm);
+  singlePos = 0;
+  paintCellInstant(0, singlePerm[0]);
+}
+
+function tick(preset) {
+  if (!tiles.length) return;
+  if (animType === "single") {
+    tickSingle(preset);
+    return;
+  }
+  if (animType === "random") {
+    fisherYates(animOrder);
+  } else {
+    // Snake: pop the last element of the order array, unshift it to index 0.
+    animOrder.unshift(animOrder.pop());
+  }
+  scheduleRepaint(preset);
+}
+
+// Repaint every grid cell from animOrder. Slow staggers each cell's swap by a
+// fresh random 0 to 1800ms; Medium/Fast repaint synchronously. Pending stagger
+// timers from the previous tick are cleared first (1800ms < the 2500ms Slow
+// tick, so they normally settle anyway).
+function scheduleRepaint(preset) {
+  for (const t of animCellTimers) clearTimeout(t);
+  animCellTimers = [];
+  for (let i = 0; i < animCells.length; i++) {
+    const cellIndex = i;
+    const tileIndex = animOrder[i];
+    if (preset.stagger > 0) {
+      animCellTimers.push(
+        setTimeout(() => paintCell(cellIndex, tileIndex, preset), Math.random() * preset.stagger)
+      );
+    } else {
+      paintCell(cellIndex, tileIndex, preset);
+    }
+  }
+}
+
+// Single: advance to the next index in the random permutation; when exhausted,
+// generate a fresh permutation and continue.
+function tickSingle(preset) {
+  singlePos += 1;
+  if (singlePos >= singlePerm.length) {
+    singlePerm = tiles.map((_, i) => i);
+    fisherYates(singlePerm);
+    singlePos = 0;
+  }
+  const tileIndex = singlePerm[singlePos];
+  if (preset.stagger > 0) {
+    for (const t of animCellTimers) clearTimeout(t);
+    animCellTimers = [];
+    animCellTimers.push(
+      setTimeout(() => paintCell(0, tileIndex, preset), Math.random() * preset.stagger)
+    );
+  } else {
+    paintCell(0, tileIndex, preset);
+  }
 }
 
 function buildShareUrl() {
@@ -186,7 +448,13 @@ function buildShareUrl() {
   const qs = new URLSearchParams();
   qs.set("ids", displayedIds.join(","));
   qs.set("cols", String(gridCols));
-  qs.set("composite", gridComposite ? "1" : "0");
+  qs.set("view", gridView);
+  // Type and speed only matter for the animated view; omit them otherwise so
+  // shared grid/composite URLs stay minimal.
+  if (gridView === "animated") {
+    qs.set("type", animType);
+    qs.set("speed", animSpeed);
+  }
   return `${window.location.origin}${path}?${qs.toString()}`;
 }
 
@@ -225,7 +493,9 @@ async function copyShareUrl() {
 
 function wireGridControls() {
   const colsSel = $("cols-select");
-  const compToggle = $("composite-toggle");
+  const viewSel = $("view-select");
+  const typeSel = $("type-select");
+  const speedSel = $("speed-select");
   const shareBtn = $("share-btn");
   if (colsSel) {
     colsSel.value = String(gridCols);
@@ -233,18 +503,35 @@ function wireGridControls() {
       const n = clampCols(parseInt(colsSel.value, 10));
       if (n) {
         gridCols = n;
-        applyGridLayout();
+        // Columns drive the static grid and the Random/Snake animated grids.
+        applyView();
       }
     });
   }
-  if (compToggle) {
-    compToggle.checked = gridComposite;
-    compToggle.addEventListener("change", () => {
-      gridComposite = compToggle.checked;
-      applyGridLayout();
+  if (viewSel) {
+    viewSel.value = gridView;
+    viewSel.addEventListener("change", () => {
+      gridView = ALLOWED_VIEWS.includes(viewSel.value) ? viewSel.value : "grid";
+      applyView();
+    });
+  }
+  if (typeSel) {
+    typeSel.value = animType;
+    typeSel.addEventListener("change", () => {
+      animType = ALLOWED_ANIM_TYPES.includes(typeSel.value) ? typeSel.value : "random";
+      if (gridView === "animated") startAnimation();
+    });
+  }
+  if (speedSel) {
+    speedSel.value = animSpeed;
+    speedSel.addEventListener("change", () => {
+      animSpeed = ALLOWED_ANIM_SPEEDS.includes(speedSel.value) ? speedSel.value : "slow";
+      if (gridView === "animated") startAnimation();
     });
   }
   if (shareBtn) shareBtn.addEventListener("click", copyShareUrl);
+  // Reflect the initial view (also toggles the animated sub-controls' visibility).
+  applyView();
 }
 
 // Tell the shared header script when the wallet connection state changes, so it
@@ -399,7 +686,8 @@ async function loadSharedComposite() {
     listEl.innerHTML = "";
     empty.hidden = false;
     empty.textContent = "No Abnormies in this composite.";
-    applyGridLayout();
+    tiles = [];
+    applyView();
     return;
   }
 
@@ -432,7 +720,8 @@ async function loadSharedComposite() {
   for (const id of ids) {
     listEl.appendChild(makeReceiptCell({ resolved: true, abnormieId: id, image: images[id] }));
   }
-  applyGridLayout();
+  tiles = ids.map((id) => ({ id, resolved: true, image: images[id] }));
+  applyView();
 }
 
 // ---------------------------------------------------------------------------
@@ -450,6 +739,8 @@ async function loadReceipts() {
     section.hidden = true;
     hideStaleBanner();
     setHoldingsNote(0);
+    tiles = [];
+    stopAnimation();
     return;
   }
   section.hidden = false;
@@ -468,6 +759,8 @@ async function loadReceipts() {
     empty.hidden = false;
     empty.textContent = "Could not load Abnormies.";
     setHoldingsNote(0);
+    tiles = [];
+    applyView();
     return;
   }
 
@@ -477,6 +770,8 @@ async function loadReceipts() {
     empty.textContent = "Nothing to show yet.";
     displayedIds = [];
     setHoldingsNote(0);
+    tiles = [];
+    applyView();
     return;
   }
 
@@ -517,7 +812,9 @@ async function loadReceipts() {
   // Resolved token IDs (ascending) are what a Share URL can encode; unresolved
   // holdings have no token ID yet and are omitted from the shareable set.
   displayedIds = resolvedIds;
-  applyGridLayout();
+  // Animated tiles mirror Composite order: resolved ascending, then unresolved.
+  tiles = owned.map((o) => ({ id: o.abnormieId, resolved: o.resolved, image: images[o.abnormieId] }));
+  applyView();
 
   // Compute the seed-staleness diff for the resolved holdings and surface the
   // resync banner if any seed Normie has unreflected activity. Fire-and-forget:

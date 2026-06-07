@@ -424,3 +424,64 @@ body {
 #receipts-list.composite .receipt-cell { gap: 0; }
 #receipts-list.composite .receipt-label { display: none; }
 #receipts-list.composite .receipt-thumb { border: none; }
+
+/* ---------------------------------------------------------------------------
+   Animated view (home only). The stage is one responsive square bounding box;
+   every sub-mode (Random, Snake, Single) fills the exact same box, so switching
+   Type never reflows the page. The square is capped at the container width, the
+   same width Composite occupies. Absent on the legacy clouds page (no stage).
+   --------------------------------------------------------------------------- */
+.animated-stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  overflow: hidden;
+}
+
+/* Random and Snake reuse the Composite layout: gutterless, label-free, driven
+   by --abn-cols. grid-auto-rows: 1fr stretches the rows to fill the square. */
+.anim-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--abn-cols, 5), 1fr);
+  grid-auto-rows: 1fr;
+  width: 100%;
+  height: 100%;
+  gap: 0;
+}
+
+@media (max-width: 600px) {
+  .anim-grid { grid-template-columns: repeat(3, 1fr); }
+}
+
+.anim-cell {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* Single fills the whole square with one canvas. */
+.anim-single { width: 100%; height: 100%; }
+
+/* Dual-layer crossfade. Each cell stacks two layers; the active one carries
+   .visible. The 1500ms opacity transition applies only when the stage carries
+   .crossfade (Slow). Medium and Fast leave it off for a hard cut. */
+.anim-layer {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+}
+
+.anim-layer.visible { opacity: 1; }
+
+.animated-stage.crossfade .anim-layer {
+  transition: opacity 1500ms ease;
+}
+
+.anim-thumb {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  image-rendering: pixelated;
+}
