@@ -88,6 +88,12 @@ await esbuild.build({
 // App stylesheet (wallet bar, panels, detail layout) used by /home and /abnormie.
 await cp(resolve(publicDir, "styles.css"), resolve(dist, "styles.css"));
 
+// gif.js web worker, served same-origin so the detail page's Animated view can
+// encode GIFs off the main thread. The main gif.js library is bundled into
+// abnormie.js (dynamic import); only the worker must be a standalone file. No
+// CDN at runtime.
+await cp(resolve(appRoot, "node_modules/gif.js/dist/gif.worker.js"), resolve(dist, "gif.worker.js"));
+
 // Slim the vendored Foundry artifact to just its ABI for the runtime fetch; copy
 // the Normies ABI the detail page reads.
 const artifact = JSON.parse(await readFile(resolve(publicDir, "abi/Abnormies.json"), "utf8"));
@@ -157,7 +163,8 @@ const newsiteConfig = {
   ...config,
   abnormieHref: `${BASE_PATH}/abnormie`,
   cloudsHref: `${BASE_PATH}/home`,
-  cloudsLabel: "My Abnormies"
+  cloudsLabel: "My Abnormies",
+  gifWorkerUrl: `${BASE_PATH}/gif.worker.js`
 };
 const configContent = `window.ABNORMIES_CONFIG = ${JSON.stringify(newsiteConfig, null, 2)};\n`;
 

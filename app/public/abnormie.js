@@ -25,6 +25,13 @@ import {
 } from "viem";
 import { mainnet, sepolia } from "viem/chains";
 
+// Canonical client-side renderer (parity-tested against the on-chain renderer).
+// DOM-free and Node-safe, so importing it at module scope does not break the
+// Node helper test that pulls the pure parsers below. gif.js is NOT imported
+// here: it reads navigator at module load, so it is dynamically imported inside
+// the browser-only download handler instead.
+import { renderCanvas, enumerateSteps, COLOR_HEX } from "./renderer.js";
+
 // ---------------------------------------------------------------------------
 // Pure helpers (DOM-free, exported for the Node test)
 // ---------------------------------------------------------------------------
@@ -140,6 +147,33 @@ function bootstrap() {
   let currentImageField = null; // data URI for SVG download
   let updateInFlight = false;
 
+  // --- Static / Animated view -------------------------------------------------
+  const ALLOWED_VIEWS = ["static", "animated"];
+  const ALLOWED_SPEEDS = ["slow", "medium", "fast"];
+  const SPEED_MS = { slow: 1000, medium: 300, fast: 100 };
+  // The blank starting frame: zero Cirrus and nothing after, so renderCanvas
+  // returns all-Sky (or all-Nimbostratus once inversion is applied for aligned).
+  const BLANK_STEP = { layer: "cirrus", index: 0 };
+  // Above this many steps the build is batched into <=200 frames.
+  const FRAME_BUDGET = 200;
+  // RGB lookup derived from the renderer palette (Sky, Cirrus, Altocumulus, Nimbostratus).
+  const PALETTE = COLOR_HEX.map((hex) => [
+    parseInt(hex.slice(0, 2), 16),
+    parseInt(hex.slice(2, 4), 16),
+    parseInt(hex.slice(4, 6), 16)
+  ]);
+
+  let currentView = "static";
+  let currentSpeed = "medium";
+  // The full global cascade log, fetched once and reused for the page lifetime.
+  let cascadeLogCache = null;
+  // Render state for the currently loaded Abnormie (null when not renderable,
+  // e.g. unrevealed or error). Aligned is captured here at load time.
+  let currentAnimState = null;
+  // Active playback session, or null. Holds the canvas contexts, the frame list,
+  // the cursor, the timer, and any in-flight gif.js encoder.
+  let anim = null;
+
   const $ = (id) => document.getElementById(id);
 
   function showBanner(kind, msg) {
@@ -152,6 +186,8 @@ function bootstrap() {
     $("banner").hidden = true;
   }
   function showError(msg) {
+    currentAnimState = null;
+    teardownAnim();
     $("content").hidden = true;
     const e = $("error-state");
     e.textContent = msg;
@@ -320,6 +356,26 @@ function bootstrap() {
     renderActions({ seedDead: seed.burned, seedCustomized: seed.customized, isActive: !isStatic, ownsAbnormie });
     renderTraits(metadata.attributes || []);
 
+    // Animation state. Active Abnormies render against live seed values; Static
+    // ones against the freeze snapshots, matching the on-chain renderer. Aligned
+    // is captured here and frozen for any playback session that starts from it.
+    currentAnimState = {
+      abnormieId: id,
+      seedNormieId: seedId,
+      pairedAtCascadeIndex: BigInt(abState.pairedAtCascadeIndex),
+      staticAt: BigInt(abState.staticAt),
+      staticAtCascadeIndex: BigInt(abState.staticAtCascadeIndex),
+      cirrusCount: isStatic ? Number(abState.cirrusCountAtFreeze) : Number(seed.cirrus),
+      seedCustomized: isStatic ? Boolean(abState.seedCustomizedAtFreeze) : Boolean(seed.customized),
+      aligned
+    };
+    ensureAnimDom();
+    const vc = $("view-controls");
+    if (vc) vc.hidden = false;
+    reflectView();
+    if (currentView === "animated") startAnimated();
+    else stopAnimated();
+
     $("error-state").hidden = true;
     $("content").hidden = false;
   }
@@ -423,7 +479,6 @@ function bootstrap() {
 
   function renderActions({ seedDead, seedCustomized, isActive, ownsAbnormie }) {
     closeFreezePicker();
-    const comingSoon = () => alert("Coming soon");
     // Thunder/Lightning require the Abnormie to be Active: Static Abnormies are
     // frozen and cannot be burned (staticAt == 0 -> isActive).
     // "Update from Normies" covers BOTH pokeSeed and pokeAwakening — it
@@ -432,7 +487,6 @@ function bootstrap() {
       { label: "Refresh from seed", visible: true, onClick: onUpdateFromNormies },
       { label: "View on OpenSea", visible: true, onClick: onViewOnOpenSea },
       { label: "Download SVG", visible: true, onClick: onDownloadSvg },
-      { label: "Download GIF", visible: true, onClick: comingSoon },
       {
         label: "Thunder",
         visible: ownsAbnormie && seedDead && isActive,
@@ -814,6 +868,16 @@ function bootstrap() {
   // place of the values, keeping the page chrome rather than dropping to an error.
   function renderUnrevealed(id) {
     hideBanner();
+    // No canvas for an unrevealed token: tear down any animation, hide the view
+    // controls, and force the Sky stand-in back into the static image slot.
+    currentAnimState = null;
+    teardownAnim();
+    const vc = $("view-controls");
+    if (vc) vc.hidden = true;
+    const ac = $("anim-canvas");
+    if (ac) ac.hidden = true;
+    const hi = $("hero-img");
+    if (hi) hi.hidden = false;
     $("title").textContent = `ABNORMIE #${id}`;
     $("subtitle").textContent = "Unrevealed — token ID and seed Normie are assigned at reveal.";
 
@@ -1003,6 +1067,409 @@ function bootstrap() {
     URL.revokeObjectURL(href);
   }
 
+  // -- Static / Animated view ----------------------------------------------
+  // The detail page renders the on-chain SVG by default (Static). The Animated
+  // view replays the Abnormie's history frame by frame on an 800x800 canvas
+  // (a 20x upscale of the 40x40 art) using the parity-tested renderCanvas, with
+  // a loop that fades back to the blank starting state and a GIF export.
+
+  // The global cascade log, fetched once and reused for the page lifetime.
+  async function getCascades() {
+    if (cascadeLogCache) return cascadeLogCache;
+    const raw = await reader.read.getAllCascades();
+    cascadeLogCache = raw.map((c) => ({
+      blockNumber: BigInt(c.blockNumber),
+      burnedTokenId: Number(c.burnedTokenId),
+      freezeTargetTokenId: Number(c.freezeTargetTokenId),
+      action: Number(c.action),
+      thunderSize: Number(c.thunderSize)
+    }));
+    return cascadeLogCache;
+  }
+
+  const speedMs = () => SPEED_MS[currentSpeed] || SPEED_MS.medium;
+
+  // Build the ordered frame list from the flat step list. Frame 0 is the blank
+  // starting state; the remaining frames are cumulative renders. Past the frame
+  // budget the build is batched so at most ~200 frames are produced, but the
+  // final frame always shows the full state.
+  function buildFrameSteps(steps) {
+    const n = steps.length;
+    const batchSize = n > FRAME_BUDGET ? Math.ceil(n / FRAME_BUDGET) : 1;
+    const frames = [BLANK_STEP];
+    for (let i = batchSize; i < n; i += batchSize) frames.push(steps[i - 1]);
+    if (n > 0) {
+      const last = steps[n - 1];
+      if (frames[frames.length - 1] !== last) frames.push(last);
+    }
+    return { frames, batchSize };
+  }
+
+  // Paint a 1600-cell color grid onto an 800x800 context: fill a 40x40 ImageData
+  // from the palette, then draw it scaled 20x with smoothing off (crisp pixels).
+  function blit(targetCtx, grid) {
+    const data = anim.imageData.data;
+    for (let i = 0; i < 1600; i++) {
+      const rgb = PALETTE[grid[i]] || PALETTE[0];
+      const o = i * 4;
+      data[o] = rgb[0];
+      data[o + 1] = rgb[1];
+      data[o + 2] = rgb[2];
+      data[o + 3] = 255;
+    }
+    anim.octx.putImageData(anim.imageData, 0, 0);
+    targetCtx.imageSmoothingEnabled = false;
+    targetCtx.clearRect(0, 0, 800, 800);
+    targetCtx.drawImage(anim.offscreen, 0, 0, 40, 40, 0, 0, 800, 800);
+  }
+
+  function renderFrameGrid(frameIndex) {
+    return renderCanvas({ ...anim.state, cascadeLog: anim.cascadeLog, step: anim.frames[frameIndex] });
+  }
+
+  function paintFrame(frameIndex) {
+    blit(anim.ctx, renderFrameGrid(frameIndex));
+  }
+
+  function drawLoading(ctx) {
+    ctx.imageSmoothingEnabled = false;
+    ctx.fillStyle = `#${COLOR_HEX[0]}`;
+    ctx.fillRect(0, 0, 800, 800);
+    ctx.fillStyle = `#${COLOR_HEX[3]}`;
+    ctx.font = "48px ui-monospace, 'SF Mono', Consolas, monospace";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("Loading…", 400, 400);
+  }
+
+  // Create the canvas (inside the hero, replacing the SVG image in place) and the
+  // view toggle + animated controls (below the hero). Idempotent.
+  function ensureAnimDom() {
+    if ($("anim-canvas")) return;
+    const hero = document.querySelector(".detail-hero");
+    if (!hero) return;
+
+    const canvas = document.createElement("canvas");
+    canvas.id = "anim-canvas";
+    canvas.width = 800;
+    canvas.height = 800;
+    canvas.className = "detail-anim-canvas";
+    canvas.hidden = true;
+    hero.appendChild(canvas);
+
+    const controls = document.createElement("div");
+    controls.id = "view-controls";
+    controls.className = "detail-view-controls";
+    controls.hidden = true;
+
+    const toggle = document.createElement("div");
+    toggle.className = "view-toggle";
+    toggle.append(makeToggleBtn("static", "Static"), makeToggleBtn("animated", "Animated"));
+
+    const ac = document.createElement("div");
+    ac.id = "anim-controls";
+    ac.className = "anim-controls";
+    ac.hidden = true;
+
+    const speedSel = document.createElement("select");
+    speedSel.id = "anim-speed";
+    speedSel.setAttribute("aria-label", "Animation speed");
+    for (const s of ALLOWED_SPEEDS) {
+      const o = document.createElement("option");
+      o.value = s;
+      o.textContent = s[0].toUpperCase() + s.slice(1);
+      speedSel.append(o);
+    }
+    speedSel.value = currentSpeed;
+    speedSel.addEventListener("change", () => setSpeed(speedSel.value));
+
+    const playBtn = document.createElement("button");
+    playBtn.id = "anim-play";
+    playBtn.className = "btn btn-sm";
+    playBtn.textContent = "Pause";
+    playBtn.addEventListener("click", togglePlay);
+
+    const restartBtn = document.createElement("button");
+    restartBtn.id = "anim-restart";
+    restartBtn.className = "btn btn-sm";
+    restartBtn.textContent = "Restart";
+    restartBtn.addEventListener("click", restartAnim);
+
+    const gifBtn = document.createElement("button");
+    gifBtn.id = "anim-gif";
+    gifBtn.className = "btn btn-sm";
+    gifBtn.textContent = "Download GIF";
+    gifBtn.addEventListener("click", onDownloadGif);
+
+    const batch = document.createElement("span");
+    batch.id = "anim-batch";
+    batch.className = "anim-batch";
+    batch.hidden = true;
+
+    ac.append(speedSel, playBtn, restartBtn, gifBtn, batch);
+    controls.append(toggle, ac);
+    hero.insertAdjacentElement("afterend", controls);
+  }
+
+  function makeToggleBtn(view, label) {
+    const b = document.createElement("button");
+    b.className = "btn btn-sm view-toggle-btn";
+    b.dataset.view = view;
+    b.textContent = label;
+    b.addEventListener("click", () => setView(view));
+    return b;
+  }
+
+  // Reflect the current view into the DOM: toggle active button, show/hide the
+  // animated controls, and swap the canvas for the SVG image (or back).
+  function reflectView() {
+    const animated = currentView === "animated";
+    const canvas = $("anim-canvas");
+    const img = $("hero-img");
+    const ac = $("anim-controls");
+    document.querySelectorAll(".view-toggle-btn").forEach((b) => {
+      b.classList.toggle("is-active", b.dataset.view === currentView);
+    });
+    if (ac) ac.hidden = !animated;
+    if (canvas) canvas.hidden = !animated;
+    if (img) img.hidden = animated;
+  }
+
+  function updateUrl() {
+    const params = new URLSearchParams(window.location.search);
+    if (currentId != null) params.set("id", currentId.toString());
+    params.set("view", currentView);
+    params.set("speed", currentSpeed);
+    history.replaceState(null, "", `${window.location.pathname}?${params.toString()}`);
+  }
+
+  function setView(view) {
+    if (!ALLOWED_VIEWS.includes(view)) view = "static";
+    if (view === currentView) return;
+    currentView = view;
+    updateUrl();
+    reflectView();
+    if (view === "animated") startAnimated();
+    else stopAnimated();
+  }
+
+  function setSpeed(speed) {
+    if (!ALLOWED_SPEEDS.includes(speed)) return;
+    currentSpeed = speed;
+    const sel = $("anim-speed");
+    if (sel && sel.value !== speed) sel.value = speed;
+    updateUrl();
+    // No cursor reset: the running loop reads speedMs() on its next tick.
+  }
+
+  function teardownAnim() {
+    if (!anim) return;
+    if (anim.timer) clearTimeout(anim.timer);
+    if (anim.gif) {
+      try {
+        anim.gif.abort();
+      } catch {
+        /* ignore */
+      }
+    }
+    anim = null;
+  }
+
+  function stopAnimated() {
+    teardownAnim();
+  }
+
+  async function startAnimated() {
+    teardownAnim();
+    if (!currentAnimState) return;
+    const canvas = $("anim-canvas");
+    if (!canvas) return;
+
+    const ctx = canvas.getContext("2d");
+    drawLoading(ctx);
+
+    let cascadeLog;
+    try {
+      cascadeLog = await getCascades();
+    } catch (err) {
+      showBanner("error", `Could not load cascade history for the animation. ${describeError(err)}`);
+      return;
+    }
+    // The user may have switched back to Static (or navigated) while awaiting.
+    if (currentView !== "animated" || !currentAnimState) return;
+
+    const state = currentAnimState;
+    const steps = enumerateSteps({ ...state, cascadeLog });
+    const { frames, batchSize } = buildFrameSteps(steps);
+
+    const offscreen = document.createElement("canvas");
+    offscreen.width = 40;
+    offscreen.height = 40;
+    const octx = offscreen.getContext("2d");
+
+    anim = {
+      canvas,
+      ctx,
+      offscreen,
+      octx,
+      imageData: octx.createImageData(40, 40),
+      state,
+      cascadeLog,
+      frames,
+      frameIndex: 0,
+      playing: true,
+      timer: null,
+      gif: null
+    };
+
+    const batch = $("anim-batch");
+    if (batch) {
+      batch.hidden = batchSize <= 1;
+      batch.textContent = batchSize > 1 ? `${batchSize} events per frame` : "";
+    }
+
+    canvas.style.transition = "none";
+    canvas.style.opacity = "1";
+    const playBtn = $("anim-play");
+    if (playBtn) playBtn.textContent = "Pause";
+
+    step();
+  }
+
+  // Paint the current frame, hold for one interval, then advance (or, at the
+  // final frame, fade to the blank state and loop).
+  function step() {
+    if (!anim || !anim.playing) return;
+    paintFrame(anim.frameIndex);
+    const isLast = anim.frameIndex >= anim.frames.length - 1;
+    anim.timer = setTimeout(() => {
+      if (!anim || !anim.playing) return;
+      if (isLast) {
+        fadeAndLoop();
+      } else {
+        anim.frameIndex += 1;
+        step();
+      }
+    }, speedMs());
+  }
+
+  // Live-only transition: fade the canvas to transparent over 1000ms, repaint the
+  // blank frame while invisible, restore opacity instantly, and start over. The
+  // fade is never part of the GIF.
+  function fadeAndLoop() {
+    const c = anim.canvas;
+    c.style.transition = "opacity 1000ms linear";
+    c.style.opacity = "0";
+    anim.timer = setTimeout(() => {
+      if (!anim || !anim.playing) return;
+      anim.frameIndex = 0;
+      c.style.transition = "none";
+      paintFrame(0);
+      void c.offsetWidth; // force reflow so the opacity reset is not animated
+      c.style.opacity = "1";
+      step();
+    }, 1000);
+  }
+
+  function togglePlay() {
+    if (!anim) return;
+    const btn = $("anim-play");
+    if (anim.playing) {
+      anim.playing = false;
+      if (anim.timer) {
+        clearTimeout(anim.timer);
+        anim.timer = null;
+      }
+      if (btn) btn.textContent = "Play";
+    } else {
+      anim.playing = true;
+      anim.canvas.style.transition = "none";
+      anim.canvas.style.opacity = "1";
+      if (btn) btn.textContent = "Pause";
+      step();
+    }
+  }
+
+  function restartAnim() {
+    if (!anim) return;
+    if (anim.timer) {
+      clearTimeout(anim.timer);
+      anim.timer = null;
+    }
+    anim.frameIndex = 0;
+    anim.playing = true;
+    anim.canvas.style.transition = "none";
+    anim.canvas.style.opacity = "1";
+    const btn = $("anim-play");
+    if (btn) btn.textContent = "Pause";
+    step();
+  }
+
+  // Encode every build frame (frame 0 through final, no fade) to a looping GIF at
+  // the current speed and download it. gif.js is dynamically imported so it never
+  // loads in Node, and runs its workers off the main thread to keep the UI live.
+  async function onDownloadGif() {
+    if (!anim) return;
+    const btn = $("anim-gif");
+    const delay = speedMs();
+
+    let GIF;
+    try {
+      ({ default: GIF } = await import("gif.js/dist/gif.js"));
+    } catch (err) {
+      showBanner("error", `Could not load the GIF encoder. ${describeError(err)}`);
+      return;
+    }
+    if (!anim) return; // torn down while loading the encoder
+
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "Encoding…";
+    }
+
+    const gif = new GIF({
+      workers: 2,
+      quality: 10,
+      width: 800,
+      height: 800,
+      repeat: 0,
+      workerScript: cfg.gifWorkerUrl || "./gif.worker.js"
+    });
+    anim.gif = gif;
+
+    const exportCanvas = document.createElement("canvas");
+    exportCanvas.width = 800;
+    exportCanvas.height = 800;
+    const ectx = exportCanvas.getContext("2d");
+    for (let f = 0; f < anim.frames.length; f++) {
+      blit(ectx, renderFrameGrid(f));
+      gif.addFrame(ectx, { copy: true, delay });
+    }
+
+    const reset = () => {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = "Download GIF";
+      }
+      if (anim) anim.gif = null;
+    };
+
+    const tokenId = currentId;
+    gif.on("finished", (blob) => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `abnormie-${tokenId}.gif`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      reset();
+    });
+    gif.on("abort", reset);
+    gif.render();
+  }
+
   // -- init ----------------------------------------------------------------
   async function init() {
     renderWallet();
@@ -1056,7 +1523,13 @@ function bootstrap() {
       }
     }
 
-    const raw = new URLSearchParams(window.location.search).get("id");
+    const params = new URLSearchParams(window.location.search);
+    const rawView = params.get("view");
+    if (ALLOWED_VIEWS.includes(rawView)) currentView = rawView;
+    const rawSpeed = params.get("speed");
+    if (ALLOWED_SPEEDS.includes(rawSpeed)) currentSpeed = rawSpeed;
+
+    const raw = params.get("id");
     if (raw == null || raw.trim() === "" || !/^\d+$/.test(raw.trim())) {
       showError("Provide an Abnormie id, e.g. abnormie.html?id=234");
       return;
@@ -1067,4 +1540,7 @@ function bootstrap() {
   window.addEventListener("DOMContentLoaded", () => {
     init().catch((e) => showError(e.message || String(e)));
   });
+  // Stop the animation timer and abort any in-flight gif.js encoder when the page
+  // is hidden or unloaded, so nothing keeps running in the background.
+  window.addEventListener("pagehide", teardownAnim);
 }

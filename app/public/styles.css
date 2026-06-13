@@ -774,3 +774,49 @@ a.receipt-cell:hover .receipt-thumb { border-color: var(--accent); }
   text-align: right;
   word-break: break-word;
 }
+
+/* Detail page: Static / Animated view toggle + animation canvas. The canvas
+   shares the 360px display box of .detail-hero-img so switching views does not
+   reflow the page; its backing store is 800x800 for a crisp 20x pixel upscale. */
+.detail-anim-canvas {
+  width: 360px;
+  height: 360px;
+  max-width: 100%;
+  image-rendering: pixelated;
+  background: var(--panel);
+  border: 1px solid var(--border);
+}
+.detail-view-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.view-toggle {
+  display: inline-flex;
+  gap: 8px;
+}
+.view-toggle-btn.is-active {
+  background: var(--text);
+  color: var(--bg);
+}
+.anim-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+.anim-controls select {
+  padding: 6px 14px;
+  font-size: 11px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+}
+.anim-batch {
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-size: 11px;
+  color: var(--muted);
+}
