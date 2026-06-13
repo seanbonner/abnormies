@@ -1070,8 +1070,10 @@ function bootstrap() {
   // -- Static / Animated view ----------------------------------------------
   // The detail page renders the on-chain SVG by default (Static). The Animated
   // view replays the Abnormie's history frame by frame on an 800x800 canvas
-  // (a 20x upscale of the 40x40 art) using the parity-tested renderCanvas, with
-  // a loop that fades back to the blank starting state and a GIF export.
+  // (a 20x upscale of the 40x40 art) using the parity-tested renderCanvas. The
+  // loop plays the build forward to the final frame, then steps backwards
+  // through the same frames to the blank start, then forward again (hard cuts,
+  // no fade), plus a GIF export that captures the full forward+reverse cycle.
 
   // The global cascade log, fetched once and reused for the page lifetime.
   async function getCascades() {
@@ -1317,6 +1319,7 @@ function bootstrap() {
       cascadeLog,
       frames,
       frameIndex: 0,
+      direction: 1, // +1 forward (build), -1 reverse (unbuild)
       playing: true,
       timer: null,
       gif: null
@@ -1328,47 +1331,48 @@ function bootstrap() {
       batch.textContent = batchSize > 1 ? `${batchSize} events per frame` : "";
     }
 
-    canvas.style.transition = "none";
-    canvas.style.opacity = "1";
     const playBtn = $("anim-play");
     if (playBtn) playBtn.textContent = "Pause";
 
     step();
   }
 
-  // Paint the current frame, hold for one interval, then advance (or, at the
-  // final frame, fade to the blank state and loop).
+  // Paint the current frame, hold for one interval, then advance in the current
+  // direction. Hard cut, no fade.
   function step() {
     if (!anim || !anim.playing) return;
     paintFrame(anim.frameIndex);
-    const isLast = anim.frameIndex >= anim.frames.length - 1;
     anim.timer = setTimeout(() => {
       if (!anim || !anim.playing) return;
-      if (isLast) {
-        fadeAndLoop();
-      } else {
-        anim.frameIndex += 1;
-        step();
-      }
+      advance();
+      step();
     }, speedMs());
   }
 
-  // Live-only transition: fade the canvas to transparent over 1000ms, repaint the
-  // blank frame while invisible, restore opacity instantly, and start over. The
-  // fade is never part of the GIF.
-  function fadeAndLoop() {
-    const c = anim.canvas;
-    c.style.transition = "opacity 1000ms linear";
-    c.style.opacity = "0";
-    anim.timer = setTimeout(() => {
-      if (!anim || !anim.playing) return;
-      anim.frameIndex = 0;
-      c.style.transition = "none";
-      paintFrame(0);
-      void c.offsetWidth; // force reflow so the opacity reset is not animated
-      c.style.opacity = "1";
-      step();
-    }, 1000);
+  // Move one frame in the current direction, reversing at each end. The final
+  // frame and frame 0 are each held for exactly one interval before the
+  // direction flips, so neither is shown twice at the turn.
+  function advance() {
+    const last = anim.frames.length - 1;
+    if (anim.direction > 0) {
+      if (anim.frameIndex >= last) {
+        anim.direction = -1;
+        anim.frameIndex = last - 1;
+      } else {
+        anim.frameIndex += 1;
+      }
+    } else {
+      if (anim.frameIndex <= 0) {
+        anim.direction = 1;
+        anim.frameIndex = 1;
+      } else {
+        anim.frameIndex -= 1;
+      }
+    }
+    // Single-frame builds (zero-event Abnormies) have last == 0: clamp back so
+    // the loop simply re-holds frame 0 each interval.
+    if (anim.frameIndex < 0) anim.frameIndex = 0;
+    if (anim.frameIndex > last) anim.frameIndex = last;
   }
 
   function togglePlay() {
@@ -1383,8 +1387,6 @@ function bootstrap() {
       if (btn) btn.textContent = "Play";
     } else {
       anim.playing = true;
-      anim.canvas.style.transition = "none";
-      anim.canvas.style.opacity = "1";
       if (btn) btn.textContent = "Pause";
       step();
     }
@@ -1397,9 +1399,8 @@ function bootstrap() {
       anim.timer = null;
     }
     anim.frameIndex = 0;
+    anim.direction = 1;
     anim.playing = true;
-    anim.canvas.style.transition = "none";
-    anim.canvas.style.opacity = "1";
     const btn = $("anim-play");
     if (btn) btn.textContent = "Pause";
     step();
@@ -1441,10 +1442,16 @@ function bootstrap() {
     exportCanvas.width = 800;
     exportCanvas.height = 800;
     const ectx = exportCanvas.getContext("2d");
-    for (let f = 0; f < anim.frames.length; f++) {
+    const addGifFrame = (f) => {
       blit(ectx, renderFrameGrid(f));
       gif.addFrame(ectx, { copy: true, delay });
-    }
+    };
+    // Full loop: frame 0, forward build through the final frame, then reverse
+    // back excluding the final frame and frame 0 (each appears exactly once, so
+    // there is no duplicate at either seam). gif.js loops the result forever.
+    const last = anim.frames.length - 1;
+    for (let f = 0; f <= last; f++) addGifFrame(f);
+    for (let f = last - 1; f >= 1; f--) addGifFrame(f);
 
     const reset = () => {
       if (btn) {
