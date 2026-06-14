@@ -53,6 +53,26 @@
           <option value="fast">Fast</option>
         </select>
       </label>
+
+      <!-- Filter chips. Multi-select within and across groups; AND across
+           groups, OR within. Counts are filled in by clouds.js on load. Hidden
+           until holdings state has been read. -->
+      <div class="filter-controls" id="filter-controls" hidden>
+        <div class="filter-group">
+          <span class="grid-control-label">Source life</span>
+          <button type="button" class="filter-chip" data-filter="life" data-value="living" aria-pressed="false">Living <span class="chip-count"></span></button>
+          <button type="button" class="filter-chip" data-filter="life" data-value="dead" aria-pressed="false">Dead <span class="chip-count"></span></button>
+        </div>
+        <div class="filter-group">
+          <span class="grid-control-label">Mutability</span>
+          <button type="button" class="filter-chip" data-filter="mut" data-value="active" aria-pressed="false">Active <span class="chip-count"></span></button>
+          <button type="button" class="filter-chip" data-filter="mut" data-value="static" aria-pressed="false">Static <span class="chip-count"></span></button>
+        </div>
+        <div class="filter-group">
+          <button type="button" class="filter-chip" data-filter="cast" data-value="1" aria-pressed="false">Has Cast ability <span class="chip-count"></span></button>
+          <button type="button" class="filter-chip" data-filter="aligned" data-value="1" aria-pressed="false">Aligned <span class="chip-count"></span></button>
+        </div>
+      </div>
     </div>
 
     <p id="resync-banner" class="section-note resync-banner" hidden>Some of your seed Normies have activity that isn't reflected on your Abnormies yet. <button type="button" id="resync-btn" class="resync-link">Resync now</button></p>

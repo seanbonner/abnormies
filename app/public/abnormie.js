@@ -32,6 +32,9 @@ import { mainnet, sepolia } from "viem/chains";
 // the browser-only download handler instead.
 import { renderCanvas, enumerateSteps, COLOR_HEX } from "./renderer.js";
 
+// Agent-binding lookup, shared with the holdings page (clouds.js).
+import { fetchBinding } from "./binding.js";
+
 // ---------------------------------------------------------------------------
 // Pure helpers (DOM-free, exported for the Node test)
 // ---------------------------------------------------------------------------
@@ -378,30 +381,6 @@ function bootstrap() {
 
     $("error-state").hidden = true;
     $("content").hidden = false;
-  }
-
-  // api.normies.art shape (as of 2026-06-03):
-  //   { "binding": { "agentId": "32512", "tokenId": "994", ... } }
-  // agentId is a NESTED, CAMEL-CASE, STRING field. Earlier readers looked for a
-  // top-level snake-case `agent_id`, which silently always evaluated to null,
-  // making `apiAgentId` always 0n and `needsAwakeningPoke` always false even
-  // for seeds that ARE bound upstream. Normalised return shape: { agentId: BigInt }
-  // or null. Callers use only `binding.agentId` from this point forward.
-  async function fetchBinding(seedId) {
-    try {
-      const res = await fetch(`https://api.normies.art/agents/binding/${seedId}`);
-      if (!res.ok) return null;
-      const j = await res.json();
-      const raw = j && typeof j === "object" ? j.binding?.agentId : null;
-      if (raw == null || raw === "") return null;
-      try {
-        return { agentId: BigInt(raw) };
-      } catch {
-        return null;
-      }
-    } catch {
-      return null; // network/CORS failure -> treat as no binding
-    }
   }
 
   // -- render --------------------------------------------------------------

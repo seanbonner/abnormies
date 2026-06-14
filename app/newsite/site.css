@@ -420,6 +420,47 @@ body {
   cursor: pointer;
 }
 
+/* Filter chips sit on their own row below the View/Columns controls. */
+.filter-controls {
+  flex-basis: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 18px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.filter-controls[hidden] { display: none; }
+
+.filter-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.filter-chip {
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  padding: 5px 10px;
+  cursor: pointer;
+  letter-spacing: 0.02em;
+}
+
+.filter-chip:hover { border-color: var(--text); }
+
+.filter-chip.active {
+  background: var(--text);
+  color: var(--bg);
+  border-color: var(--text);
+}
+
+.chip-count { opacity: 0.6; }
+.filter-chip.active .chip-count { opacity: 0.75; }
+
 /* Column count is driven by --abn-cols (set by clouds.js) instead of an inline
    grid-template-columns, so the mobile media query below can override it. The
    selector value the user picked is preserved; only the rendered columns cap. */

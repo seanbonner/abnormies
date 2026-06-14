@@ -10,10 +10,12 @@ import {
   http,
   isAddress,
   getAddress,
-  getContract
+  getContract,
+  encodeFunctionData
 } from "viem";
 import { mainnet, sepolia } from "viem/chains";
 import { getHoldings } from "./holdings.js";
+import { fetchBinding } from "./binding.js";
 
 const cfg = window.ABNORMIES_CONFIG || {};
 const CHAINS = { 1: mainnet, 11155111: sepolia };
@@ -46,6 +48,65 @@ const CANVAS_STORAGE_ABI = [
   }
 ];
 
+// Adapter8004 (ERC-8217) binding lookup. Used to confirm, on-chain, that the
+// agent the Normies API reports for a seed actually binds back to that seed
+// Normie before we treat the seed as awakening-stale. The adapter address is
+// resolved at runtime from Abnormies.ADAPTER8004(). bindingOf returns a
+// (standard, tokenContract, tokenId) tuple; TokenStandard.ERC721 == 0.
+const ADAPTER8004_ABI = [
+  {
+    type: "function",
+    name: "bindingOf",
+    inputs: [{ name: "agentId", type: "uint256" }],
+    outputs: [
+      {
+        name: "",
+        type: "tuple",
+        components: [
+          { name: "standard", type: "uint8" },
+          { name: "tokenContract", type: "address" },
+          { name: "tokenId", type: "uint256" }
+        ]
+      }
+    ],
+    stateMutability: "view"
+  }
+];
+
+// Canonical Multicall3 deployment (same address on every chain). Used by Resync
+// to send one transaction that batches the pokeSeed-style pokeMany and the
+// per-seed pokeAwakening calls. Both are permissionless and do not check
+// msg.sender, so routing through Multicall3 is semantically inert.
+const MULTICALL3_ADDRESS = "0xcA11bde05977b3631167028862bE2a173976CA11";
+const MULTICALL3_ABI = [
+  {
+    type: "function",
+    name: "aggregate3",
+    stateMutability: "payable",
+    inputs: [
+      {
+        name: "calls",
+        type: "tuple[]",
+        components: [
+          { name: "target", type: "address" },
+          { name: "allowFailure", type: "bool" },
+          { name: "callData", type: "bytes" }
+        ]
+      }
+    ],
+    outputs: [
+      {
+        name: "returnData",
+        type: "tuple[]",
+        components: [
+          { name: "success", type: "bool" },
+          { name: "returnData", type: "bytes" }
+        ]
+      }
+    ]
+  }
+];
+
 let abi = null;
 let publicClient = null;
 let reader = null;
@@ -58,9 +119,13 @@ let listenersAttached = false;
 // them; if resolution fails the resync banner simply never shows.
 let normiesAddress = null;
 let canvasStorageAddress = null;
-// Seed Normie IDs behind the wallet's resolved holdings that have upstream
-// activity not yet reflected on-chain. Populated by refreshStaleBanner().
-let staleSeedIds = [];
+let adapterAddress = null;
+// Seed Normies behind the wallet's resolved holdings that have upstream activity
+// not yet reflected on-chain. Two disjoint sets, populated by enrichHoldings():
+//   pokeSeedStaleSeeds — BigInt seed IDs needing a pokeSeed/pokeMany refresh.
+//   awakeningStale     — { seedId, agentId } pairs needing a pokeAwakening.
+let pokeSeedStaleSeeds = [];
+let awakeningStale = [];
 let resyncInFlight = false;
 
 // --- Grid view state + shared-composite mode -------------------------------
@@ -94,6 +159,28 @@ function readInitialView() {
 }
 let gridView = readInitialView();
 
+// --- Holdings filter state -------------------------------------------------
+// Multi-select within and across the four groups; AND across groups, OR within.
+// Persisted in the URL with short param names (life, mut, cast, aln). Filters
+// only act on wallet holdings (shared-composite tiles have no on-chain state).
+const ALLOWED_LIFE = ["living", "dead"];
+const ALLOWED_MUT = ["active", "static"];
+function parseSet(name, allowed) {
+  const raw = _params.get(name);
+  const s = new Set();
+  if (raw) for (const v of raw.split(",")) if (allowed.includes(v)) s.add(v);
+  return s;
+}
+let filterLife = parseSet("life", ALLOWED_LIFE);
+let filterMut = parseSet("mut", ALLOWED_MUT);
+let filterCast = _params.get("cast") === "1";
+let filterAligned = _params.get("aln") === "1";
+
+// Holdings counts for the note line. totalOwned is the wallet's full count;
+// visibleCount is how many survive the active filters.
+let totalOwned = 0;
+let visibleCount = 0;
+
 // Animated sub-controls (only meaningful when gridView === "animated").
 const ALLOWED_ANIM_TYPES = ["random", "snake", "single"];
 const ALLOWED_ANIM_SPEEDS = ["slow", "medium", "fast"];
@@ -110,7 +197,9 @@ const SPEED_PRESETS = {
 };
 
 // Rendered tiles for the current data set, token ID ascending then unresolved,
-// matching Composite static order. Each: { id, resolved, image }.
+// matching Composite static order. Each: { id, resolved, image, hasState, ... }.
+// Filter-relevant booleans (isStatic, isDead, isCustomized, hasCastAbility,
+// isAligned) are added by enrichHoldings once seed state has been read.
 let tiles = [];
 
 // Animation runtime state.
@@ -133,6 +222,21 @@ function fisherYates(arr) {
   return arr;
 }
 
+// Run fn over items with at most `limit` in flight at once. Chunked rather than
+// a sliding window: simple, and holding counts are small. fn must not throw
+// (fetchBinding swallows its own errors), so a bad item never aborts the batch.
+// ponytail: chunked cap, swap for a sliding window if a wallet ever holds
+// hundreds of awakening candidates.
+async function mapLimit(items, limit, fn) {
+  const out = [];
+  for (let i = 0; i < items.length; i += limit) {
+    const chunk = items.slice(i, i + limit);
+    const res = await Promise.all(chunk.map((it, j) => fn(it, i + j)));
+    out.push(...res);
+  }
+  return out;
+}
+
 const $ = (id) => document.getElementById(id);
 const short = (a) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 
@@ -146,17 +250,23 @@ function hideBanner() {
   $("banner").hidden = true;
 }
 
-// Set the holdings note to reflect the wallet's count. Only present on the
-// /home page (the element carries id="holdings-note"); a no-op elsewhere. A
-// zero count restores the generic prompt.
+// Holdings note. Only present on the /home page (id="holdings-note"); a no-op
+// elsewhere. Reads the filter state: with filters active it shows "Showing M of
+// N", otherwise the plain owned count. A zero count restores the generic prompt.
 const DEFAULT_HOLDINGS_NOTE = "Click any Abnormie to see its detail page.";
-function setHoldingsNote(count) {
+function refreshHoldingsNote() {
   const note = $("holdings-note");
   if (!note) return;
-  note.textContent =
-    count > 0
-      ? `You own ${count} ${count === 1 ? "Abnormie" : "Abnormies"}. Click any one to see its detail page.`
-      : DEFAULT_HOLDINGS_NOTE;
+  if (totalOwned === 0) {
+    note.textContent = DEFAULT_HOLDINGS_NOTE;
+    return;
+  }
+  const word = totalOwned === 1 ? "Abnormie" : "Abnormies";
+  if (anyFilterActive()) {
+    note.textContent = `Showing ${visibleCount} of ${totalOwned} ${word}.`;
+  } else {
+    note.textContent = `You own ${totalOwned} ${word}. Click any one to see its detail page.`;
+  }
 }
 
 // Sky-colored stand-in for unrevealed Abnormies (matches main.js).
@@ -214,6 +324,120 @@ function makeReceiptCell({ resolved, abnormieId, image }) {
   label.textContent = labelText;
   cell.appendChild(label);
   return cell;
+}
+
+// ---------------------------------------------------------------------------
+// Filtering (reorganized /home only)
+// ---------------------------------------------------------------------------
+function anyFilterActive() {
+  return filterLife.size > 0 || filterMut.size > 0 || filterCast || filterAligned;
+}
+
+function toggleSet(set, value) {
+  if (set.has(value)) set.delete(value);
+  else set.add(value);
+}
+
+// A cell matches the active filters. Stateless cells (unrevealed holdings, or
+// state that failed to load) only show when no filter is active. Filter state
+// is read from data-* attributes set by enrichHoldings.
+function cellMatches(cell) {
+  const ds = cell.dataset;
+  if (ds.state !== "1") return !anyFilterActive();
+  if (filterLife.size && !filterLife.has(ds.life)) return false;
+  if (filterMut.size && !filterMut.has(ds.mut)) return false;
+  if (filterCast && ds.cast !== "1") return false;
+  if (filterAligned && ds.aligned !== "1") return false;
+  return true;
+}
+
+// Toggle each grid cell's visibility against the active filters. Hides via
+// display:none rather than re-rendering. Recomputes visibleCount and the note.
+function applyFilters() {
+  const listEl = $("receipts-list");
+  if (!listEl) return;
+  let visible = 0;
+  for (const cell of listEl.children) {
+    const show = cellMatches(cell);
+    cell.style.display = show ? "" : "none";
+    if (show) visible++;
+  }
+  visibleCount = visible;
+  refreshHoldingsNote();
+}
+
+// Per-chip match counts, computed once per holdings load (not per interaction).
+// Each count is that chip's predicate alone, not combined with other filters.
+function setFilterCounts() {
+  const counts = { living: 0, dead: 0, active: 0, static: 0, cast: 0, aligned: 0 };
+  for (const t of tiles) {
+    if (!t.hasState) continue;
+    counts[t.isDead ? "dead" : "living"]++;
+    counts[t.isStatic ? "static" : "active"]++;
+    if (t.hasCastAbility) counts.cast++;
+    if (t.isAligned) counts.aligned++;
+  }
+  document.querySelectorAll(".filter-chip").forEach((chip) => {
+    const f = chip.dataset.filter;
+    const v = chip.dataset.value;
+    let c = 0;
+    if (f === "life" || f === "mut") c = counts[v] || 0;
+    else if (f === "cast") c = counts.cast;
+    else if (f === "aligned") c = counts.aligned;
+    const span = chip.querySelector(".chip-count");
+    if (span) span.textContent = `(${c})`;
+  });
+}
+
+// Reflect the current filter state onto a chip's pressed appearance.
+function reflectChip(chip) {
+  const f = chip.dataset.filter;
+  const v = chip.dataset.value;
+  const on =
+    (f === "life" && filterLife.has(v)) ||
+    (f === "mut" && filterMut.has(v)) ||
+    (f === "cast" && filterCast) ||
+    (f === "aligned" && filterAligned);
+  chip.setAttribute("aria-pressed", on ? "true" : "false");
+  chip.classList.toggle("active", on);
+}
+
+// Persist filter state in the URL alongside ?view/?cols/?ids. replaceState so
+// it survives reload without adding history entries on every chip toggle.
+function updateFilterUrl() {
+  const url = new URL(window.location.href);
+  const p = url.searchParams;
+  const setList = (name, values) => {
+    if (values.length) p.set(name, values.join(","));
+    else p.delete(name);
+  };
+  setList("life", [...filterLife]);
+  setList("mut", [...filterMut]);
+  if (filterCast) p.set("cast", "1");
+  else p.delete("cast");
+  if (filterAligned) p.set("aln", "1");
+  else p.delete("aln");
+  history.replaceState(null, "", url);
+}
+
+function wireFilterControls() {
+  const fc = $("filter-controls");
+  if (!fc) return;
+  fc.querySelectorAll(".filter-chip").forEach(reflectChip);
+  fc.addEventListener("click", (e) => {
+    const chip = e.target.closest(".filter-chip");
+    if (!chip) return;
+    const f = chip.dataset.filter;
+    const v = chip.dataset.value;
+    if (f === "life") toggleSet(filterLife, v);
+    else if (f === "mut") toggleSet(filterMut, v);
+    else if (f === "cast") filterCast = !filterCast;
+    else if (f === "aligned") filterAligned = !filterAligned;
+    else return;
+    reflectChip(chip);
+    updateFilterUrl();
+    applyFilters();
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -530,6 +754,7 @@ function wireGridControls() {
     });
   }
   if (shareBtn) shareBtn.addEventListener("click", copyShareUrl);
+  wireFilterControls();
   // Reflect the initial view (also toggles the animated sub-controls' visibility).
   applyView();
 }
@@ -571,14 +796,17 @@ async function init() {
   publicClient = createPublicClient({ chain, transport: http(cfg.rpcUrl || undefined) });
   reader = getContract({ address: contractAddress, abi, client: publicClient });
 
-  // Resolve the upstream Normies contract addresses once, for the staleness
-  // diff. Non-fatal: if this fails the resync banner just never appears.
+  // Resolve the upstream contract addresses once, for the staleness diff and
+  // filter state. Non-fatal: if this fails the resync banner and the filters
+  // simply never appear.
   try {
     normiesAddress = getAddress(await reader.read.NORMIES());
     canvasStorageAddress = getAddress(await reader.read.NORMIES_CANVAS_STORAGE());
+    adapterAddress = getAddress(await reader.read.ADAPTER8004());
   } catch {
     normiesAddress = null;
     canvasStorageAddress = null;
+    adapterAddress = null;
   }
 
   if (window.ethereum) {
@@ -676,8 +904,15 @@ async function loadSharedComposite() {
   const empty = $("receipts-empty");
   section.hidden = false;
   // Shared-composite mode is wallet-independent; resync is a holder action, so
-  // the banner never applies here.
+  // the banner never applies. Filters need per-tile on-chain state these tiles
+  // do not carry, so disable them too (reset state and hide the row).
   hideStaleBanner();
+  filterLife.clear();
+  filterMut.clear();
+  filterCast = false;
+  filterAligned = false;
+  const filterCtl = $("filter-controls");
+  if (filterCtl) filterCtl.hidden = true;
 
   const ids = [...new Set(sharedIds)].sort((a, b) => a - b);
   displayedIds = ids;
@@ -720,7 +955,7 @@ async function loadSharedComposite() {
   for (const id of ids) {
     listEl.appendChild(makeReceiptCell({ resolved: true, abnormieId: id, image: images[id] }));
   }
-  tiles = ids.map((id) => ({ id, resolved: true, image: images[id] }));
+  tiles = ids.map((id) => ({ id, resolved: true, image: images[id], hasState: false }));
   applyView();
 }
 
@@ -734,11 +969,14 @@ async function loadReceipts() {
   const section = $("receipts-section");
   const listEl = $("receipts-list");
   const empty = $("receipts-empty");
+  const filterCtl = $("filter-controls");
 
   if (!account) {
     section.hidden = true;
     hideStaleBanner();
-    setHoldingsNote(0);
+    if (filterCtl) filterCtl.hidden = true;
+    totalOwned = 0;
+    refreshHoldingsNote();
     tiles = [];
     stopAnimation();
     return;
@@ -747,9 +985,10 @@ async function loadReceipts() {
 
   listEl.innerHTML = "<div class='loading'>Loading Abnormies…</div>";
   empty.hidden = true;
-  // Hide any prior banner while the new holdings (and their diff) load. The
-  // banner only reappears once the diff completes and finds stale seeds.
+  // Hide any prior banner and the filters while the new holdings (and their
+  // diff) load. Both reappear once enrichHoldings settles.
   hideStaleBanner();
+  if (filterCtl) filterCtl.hidden = true;
 
   let owned;
   try {
@@ -758,7 +997,8 @@ async function loadReceipts() {
     listEl.innerHTML = "";
     empty.hidden = false;
     empty.textContent = "Could not load Abnormies.";
-    setHoldingsNote(0);
+    totalOwned = 0;
+    refreshHoldingsNote();
     tiles = [];
     applyView();
     return;
@@ -769,31 +1009,45 @@ async function loadReceipts() {
     empty.hidden = false;
     empty.textContent = "Nothing to show yet.";
     displayedIds = [];
-    setHoldingsNote(0);
+    totalOwned = 0;
+    refreshHoldingsNote();
     tiles = [];
     applyView();
     return;
   }
 
-  setHoldingsNote(owned.length);
+  totalOwned = owned.length;
+  refreshHoldingsNote();
 
-  // Fetch images for resolved holdings in one multicall.
+  // Phase 1 — one multicall fetches BOTH the image (tokenURI) and the Abnormie
+  // state (getAbnormieState, which yields the seed Normie ID) for every resolved
+  // holding. tokenURI needs no seed; getAbnormieState.seedNormieId feeds the
+  // phase-2 seed reads. Folding them into a single round trip keeps image
+  // rendering as fast as the old image-only path.
   const resolvedIds = owned.filter((o) => o.resolved).map((o) => o.abnormieId);
   const images = {};
+  const abStateById = {}; // abnormieId -> { seedId, isStatic, seedDeadAtFreeze, seedCustomizedAtFreeze }
   if (resolvedIds.length) {
-    const calls = resolvedIds.map((id) => ({
+    const uriCalls = resolvedIds.map((id) => ({
       address: contractAddress,
       abi,
       functionName: "tokenURI",
       args: [BigInt(id)]
     }));
-    let uriResults;
+    const stateCalls = resolvedIds.map((id) => ({
+      address: contractAddress,
+      abi,
+      functionName: "getAbnormieState",
+      args: [BigInt(id)]
+    }));
+    let results;
     try {
-      uriResults = await publicClient.multicall({ contracts: calls });
+      results = await publicClient.multicall({ contracts: [...uriCalls, ...stateCalls] });
     } catch {
-      uriResults = resolvedIds.map(() => ({ status: "failure" }));
+      results = [...uriCalls, ...stateCalls].map(() => ({ status: "failure" }));
     }
-    uriResults.forEach((r, k) => {
+    const n = resolvedIds.length;
+    results.slice(0, n).forEach((r, k) => {
       if (r.status !== "success") return;
       try {
         images[resolvedIds[k]] = parseTokenURIImage(r.result);
@@ -801,115 +1055,81 @@ async function loadReceipts() {
         /* fall back to Sky stand-in */
       }
     });
+    results.slice(n).forEach((r, k) => {
+      if (r.status !== "success") return;
+      const st = r.result;
+      abStateById[resolvedIds[k]] = {
+        seedId: BigInt(st.seedNormieId),
+        isStatic: st.staticAt !== 0n,
+        seedDeadAtFreeze: Boolean(st.seedDeadAtFreeze),
+        seedCustomizedAtFreeze: Boolean(st.seedCustomizedAtFreeze)
+      };
+    });
   }
 
+  // Paint the grid now (images), so the art shows before the seed-level diff.
   listEl.innerHTML = "";
+  const cellById = new Map();
   for (const o of owned) {
-    listEl.appendChild(
-      makeReceiptCell({ resolved: o.resolved, abnormieId: o.abnormieId, image: images[o.abnormieId] })
-    );
+    const cell = makeReceiptCell({ resolved: o.resolved, abnormieId: o.abnormieId, image: images[o.abnormieId] });
+    if (o.resolved) cellById.set(o.abnormieId, cell);
+    listEl.appendChild(cell);
   }
   // Resolved token IDs (ascending) are what a Share URL can encode; unresolved
   // holdings have no token ID yet and are omitted from the shareable set.
   displayedIds = resolvedIds;
   // Animated tiles mirror Composite order: resolved ascending, then unresolved.
-  tiles = owned.map((o) => ({ id: o.abnormieId, resolved: o.resolved, image: images[o.abnormieId] }));
+  // Filter state (hasState + booleans) is filled in by enrichHoldings.
+  tiles = owned.map((o) => ({ id: o.abnormieId, resolved: o.resolved, image: images[o.abnormieId], hasState: false }));
   applyView();
 
-  // Compute the seed-staleness diff for the resolved holdings and surface the
-  // resync banner if any seed Normie has unreflected activity. Fire-and-forget:
-  // the holdings grid is already rendered; the banner appears when the diff
-  // settles. Unresolved holdings have no seed pairing yet and are excluded.
-  refreshStaleBanner(resolvedIds);
-}
-
-// ---------------------------------------------------------------------------
-// Resync banner — compares each resolved holding's seed Normie against live
-// upstream state (Normies.ownerOf + NormiesCanvasStorage.isTransformed) and
-// surfaces a one-line banner when any seed has activity not yet reflected
-// on-chain. Clicking "Resync now" sends a single pokeMany() for every stale
-// seed. Mirrors the per-seed needsSeedPoke logic in abnormie.js
-// onUpdateFromNormies (awakening is intentionally out of scope here).
-// ---------------------------------------------------------------------------
-function hideStaleBanner() {
-  staleSeedIds = [];
-  const el = $("resync-banner");
-  if (el) el.hidden = true;
-}
-
-// Recompute the staleness diff for the given resolved Abnormie IDs and toggle
-// the banner. Hides the banner while computing (no spinner) and only shows it
-// if at least one seed is stale.
-async function refreshStaleBanner(resolvedIds) {
-  const banner = $("resync-banner");
-  if (!banner) return; // page has no banner slot — nothing to do
-  // The diff needs the upstream contract addresses; if they didn't resolve,
-  // skip the feature entirely (banner stays hidden).
-  if (!normiesAddress || !canvasStorageAddress) {
-    hideStaleBanner();
-    return;
-  }
-  if (!resolvedIds || resolvedIds.length === 0) {
-    hideStaleBanner();
-    return;
-  }
-
-  banner.hidden = true;
-
-  let stale;
+  // Phase 2 — seed-level reads, per-tile filter state, and the staleness diff
+  // (pokeSeed + awakening). Awaited but the grid is already painted; failures
+  // are swallowed so the page still works (filters and banner stay hidden).
   try {
-    stale = await computeStaleSeeds(resolvedIds);
+    await enrichHoldings(resolvedIds, abStateById, cellById);
   } catch {
-    // Diff failed (RPC hiccup, etc.) — leave the banner hidden rather than
-    // showing a misleading state.
-    hideStaleBanner();
-    return;
+    /* leave filters/banner disabled */
   }
-
-  staleSeedIds = stale;
-  banner.hidden = stale.length === 0;
 }
 
-// Returns the deduped list of seed Normie IDs (as BigInt) behind the resolved
-// holdings that need a pokeSeed. All reads go through publicClient.multicall.
-async function computeStaleSeeds(resolvedIds) {
-  // 1. Resolve each Abnormie's seed Normie ID.
-  const stateCalls = resolvedIds.map((id) => ({
-    address: contractAddress,
-    abi,
-    functionName: "getAbnormieState",
-    args: [BigInt(id)]
-  }));
-  const stateResults = await publicClient.multicall({ contracts: stateCalls });
-  const seedIds = [];
-  for (const r of stateResults) {
-    if (r.status !== "success") continue;
-    // AbnormieState.seedNormieId is the first field.
-    seedIds.push(BigInt(r.result.seedNormieId));
-  }
-  // Dedupe — distinct Abnormies always have distinct seeds, but guard anyway.
-  const uniqueSeeds = [...new Set(seedIds.map((s) => s.toString()))].map((s) => BigInt(s));
-  if (uniqueSeeds.length === 0) return [];
+// ---------------------------------------------------------------------------
+// Holdings enrichment + staleness diff.
+//
+// For each resolved holding's seed Normie, reads stored seed state, the live
+// Normies owner, and live customization (one multicall per source), then:
+//   - derives the per-tile filter booleans and attaches them to tiles + cells,
+//   - flags pokeSeed-stale seeds (matching abnormie.js onUpdateFromNormies),
+//   - flags awakening-stale seeds: not yet awakened on-chain, owned by the
+//     connected wallet, and bound upstream (api.normies.art) to an agent whose
+//     Adapter8004 binding confirms it points back at this seed Normie.
+// Both stale categories drive the single resync banner.
+// ---------------------------------------------------------------------------
+async function enrichHoldings(resolvedIds, abStateById, cellById) {
+  if (!normiesAddress || !canvasStorageAddress) return; // can't derive state or diff
 
-  // 2. Read stored seed state, live owner, and live customization in parallel,
-  //    one multicall per source.
-  const seedStateCalls = uniqueSeeds.map((seedId) => ({
+  const uniqueSeeds = [
+    ...new Set(resolvedIds.map((id) => abStateById[id]).filter(Boolean).map((ab) => ab.seedId.toString()))
+  ].map((s) => BigInt(s));
+  if (uniqueSeeds.length === 0) return;
+
+  const seedStateCalls = uniqueSeeds.map((s) => ({
     address: contractAddress,
     abi,
     functionName: "getSeedState",
-    args: [seedId]
+    args: [s]
   }));
-  const ownerCalls = uniqueSeeds.map((seedId) => ({
+  const ownerCalls = uniqueSeeds.map((s) => ({
     address: normiesAddress,
     abi: NORMIES_ABI,
     functionName: "ownerOf",
-    args: [seedId]
+    args: [s]
   }));
-  const transformedCalls = uniqueSeeds.map((seedId) => ({
+  const transformedCalls = uniqueSeeds.map((s) => ({
     address: canvasStorageAddress,
     abi: CANVAS_STORAGE_ABI,
     functionName: "isTransformed",
-    args: [seedId]
+    args: [s]
   }));
   const [seedStates, owners, transformed] = await Promise.all([
     publicClient.multicall({ contracts: seedStateCalls }),
@@ -917,17 +1137,17 @@ async function computeStaleSeeds(resolvedIds) {
     publicClient.multicall({ contracts: transformedCalls })
   ]);
 
-  // 3. Per-seed staleness, matching abnormie.js onUpdateFromNormies.
-  const stale = [];
+  // Per-seed derived state, keyed by seed id string. pokeSeed staleness mirrors
+  // the existing conditions exactly.
+  const seedInfo = new Map();
+  const pokeSeedStale = [];
   uniqueSeeds.forEach((seedId, i) => {
     const ss = seedStates[i];
-    if (ss.status !== "success") return; // can't judge without stored state
-    const lastObserved = ss.result[0]; // address — ZERO if never observed
-    const seedCustomized = Boolean(ss.result[2]);
-    const seedBurned = Boolean(ss.result[3]);
-
-    // A seed already marked burned no-ops on pokeSeed — never stale.
-    if (seedBurned) return;
+    const ok = ss.status === "success";
+    const lastObserved = ok ? ss.result[0] : null; // address — ZERO if never observed
+    const seedCustomized = ok ? Boolean(ss.result[2]) : false;
+    const seedBurned = ok ? Boolean(ss.result[3]) : false;
+    const seedAwakened = ok ? Boolean(ss.result[4]) : false;
 
     // ownerOf reverts (multicall failure) or returns zero for a burned/dead
     // Normie; both map to "no current owner".
@@ -936,26 +1156,145 @@ async function computeStaleSeeds(resolvedIds) {
       ownerRes.status === "success" && ownerRes.result !== ZERO_ADDRESS ? ownerRes.result : null;
     const isTransformed = transformed[i].status === "success" && transformed[i].result === true;
 
-    const firstObservation = currentOwner != null && lastObserved === ZERO_ADDRESS;
-    const ownerChanged =
-      currentOwner != null &&
-      lastObserved !== ZERO_ADDRESS &&
-      getAddress(currentOwner) !== getAddress(lastObserved);
-    const needsBurnedMark = currentOwner == null; // seedBurned already false here
-    const needsCustomizedMark = isTransformed && !seedCustomized;
-
-    if (firstObservation || ownerChanged || needsBurnedMark || needsCustomizedMark) {
-      stale.push(seedId);
+    let needsSeedPoke = false;
+    if (ok && !seedBurned) {
+      const firstObservation = currentOwner != null && lastObserved === ZERO_ADDRESS;
+      const ownerChanged =
+        currentOwner != null &&
+        lastObserved !== ZERO_ADDRESS &&
+        getAddress(currentOwner) !== getAddress(lastObserved);
+      const needsBurnedMark = currentOwner == null; // seedBurned already false here
+      const needsCustomizedMark = isTransformed && !seedCustomized;
+      needsSeedPoke = firstObservation || ownerChanged || needsBurnedMark || needsCustomizedMark;
+      if (needsSeedPoke) pokeSeedStale.push(seedId);
     }
+
+    seedInfo.set(seedId.toString(), { ok, seedCustomized, seedBurned, seedAwakened, currentOwner, needsSeedPoke });
   });
-  return stale;
+
+  // Awakening staleness: seeds NOT already pokeSeed-stale, not burned, owned by
+  // the connected wallet, and not yet awakened on-chain. For those, resolve the
+  // upstream agent binding (api.normies.art) and confirm it on-chain via
+  // Adapter8004 before flagging. API calls are off the multicall path; capped
+  // at 8 concurrent. fetchBinding never throws, so a failed lookup just yields
+  // agentId 0n and is skipped.
+  const awoken = [];
+  const candidates = uniqueSeeds.filter((seedId) => {
+    const info = seedInfo.get(seedId.toString());
+    if (!info || !info.ok || info.needsSeedPoke) return false;
+    if (info.seedBurned || info.seedAwakened) return false;
+    if (!info.currentOwner || getAddress(info.currentOwner) !== getAddress(account)) return false;
+    return true;
+  });
+  if (candidates.length && adapterAddress) {
+    const bindings = await mapLimit(candidates, 8, async (seedId) => {
+      const b = await fetchBinding(seedId);
+      return { seedId, agentId: b && b.agentId != null ? b.agentId : 0n };
+    });
+    const withAgent = bindings.filter((b) => b.agentId !== 0n);
+    if (withAgent.length) {
+      const bindCalls = withAgent.map((b) => ({
+        address: adapterAddress,
+        abi: ADAPTER8004_ABI,
+        functionName: "bindingOf",
+        args: [b.agentId]
+      }));
+      let bindResults;
+      try {
+        bindResults = await publicClient.multicall({ contracts: bindCalls });
+      } catch {
+        bindResults = withAgent.map(() => ({ status: "failure" }));
+      }
+      bindResults.forEach((r, k) => {
+        if (r.status !== "success") return;
+        const bnd = r.result; // { standard, tokenContract, tokenId }
+        if (
+          Number(bnd.standard) === 0 && // TokenStandard.ERC721
+          getAddress(bnd.tokenContract) === getAddress(normiesAddress) &&
+          BigInt(bnd.tokenId) === withAgent[k].seedId
+        ) {
+          awoken.push({ seedId: withAgent[k].seedId, agentId: withAgent[k].agentId });
+        }
+      });
+    }
+  }
+
+  // Publish stale sets and the banner (either category counts toward it).
+  pokeSeedStaleSeeds = pokeSeedStale;
+  awakeningStale = awoken;
+  const banner = $("resync-banner");
+  if (banner) banner.hidden = pokeSeedStale.length + awoken.length === 0;
+
+  // Derive per-tile filter booleans from abnormie + seed state, attach to the
+  // tile objects (counts / animation) and the cells (filter visibility).
+  for (const t of tiles) {
+    if (!t.resolved) continue;
+    const ab = abStateById[t.id];
+    if (!ab) continue;
+    const info = seedInfo.get(ab.seedId.toString());
+    if (!info || !info.ok) continue;
+
+    const isStatic = ab.isStatic;
+    const isDead = isStatic ? ab.seedDeadAtFreeze : info.seedBurned;
+    const isCustomized = isStatic ? ab.seedCustomizedAtFreeze : info.seedCustomized;
+    const canCastThunder = !isStatic && isDead;
+    const canCastLightning = !isStatic && !isDead && isCustomized;
+    const hasCastAbility = canCastThunder || canCastLightning;
+    const isAligned =
+      info.seedAwakened &&
+      info.currentOwner != null &&
+      getAddress(info.currentOwner) === getAddress(account);
+
+    Object.assign(t, {
+      hasState: true,
+      seedId: ab.seedId,
+      isStatic,
+      isDead,
+      isCustomized,
+      canCastThunder,
+      canCastLightning,
+      hasCastAbility,
+      isAligned
+    });
+
+    const cell = cellById.get(t.id);
+    if (cell) {
+      cell.dataset.state = "1";
+      cell.dataset.life = isDead ? "dead" : "living";
+      cell.dataset.mut = isStatic ? "static" : "active";
+      cell.dataset.cast = hasCastAbility ? "1" : "0";
+      cell.dataset.aligned = isAligned ? "1" : "0";
+    }
+  }
+
+  setFilterCounts();
+  const fc = $("filter-controls");
+  if (fc) fc.hidden = false;
+  applyFilters();
 }
 
-// "Resync now" — sends one pokeMany() for every stale seed, then re-runs the
-// diff so the banner hides once the chain reflects the activity. No size cap.
+// ---------------------------------------------------------------------------
+// Resync banner reset.
+// ---------------------------------------------------------------------------
+function hideStaleBanner() {
+  pokeSeedStaleSeeds = [];
+  awakeningStale = [];
+  const el = $("resync-banner");
+  if (el) el.hidden = true;
+}
+
+// "Resync now" — writes the pending pokeSeed and pokeAwakening updates, then
+// reloads holdings so the banner clears once the chain reflects the activity.
+//
+// pokeSeed-only: a direct pokeMany() (cheapest path). Mixed (any awakening-stale
+// seed present): one Multicall3.aggregate3() that batches the pokeMany and a
+// per-seed pokeAwakening, each with allowFailure so a single stale binding does
+// not revert the whole tx. Both pokes are permissionless, so routing through
+// Multicall3 has no effect on Abnormies state.
 async function onResync() {
   const btn = $("resync-btn");
-  if (resyncInFlight || !staleSeedIds.length) return;
+  if (resyncInFlight) return;
+  if (pokeSeedStaleSeeds.length + awakeningStale.length === 0) return;
   if (!account) {
     await connect();
     if (!account) return;
@@ -965,7 +1304,8 @@ async function onResync() {
     return;
   }
 
-  const seeds = staleSeedIds.slice();
+  const seeds = pokeSeedStaleSeeds.slice();
+  const awakenings = awakeningStale.slice();
   const original = btn ? btn.textContent : "";
   resyncInFlight = true;
   if (btn) {
@@ -974,17 +1314,42 @@ async function onResync() {
   }
 
   try {
-    const hash = await walletClient.writeContract({
-      address: contractAddress,
-      abi,
-      functionName: "pokeMany",
-      args: [seeds],
-      account
-    });
+    let hash;
+    if (awakenings.length === 0) {
+      hash = await walletClient.writeContract({
+        address: contractAddress,
+        abi,
+        functionName: "pokeMany",
+        args: [seeds],
+        account
+      });
+    } else {
+      const calls = [];
+      if (seeds.length) {
+        calls.push({
+          target: contractAddress,
+          allowFailure: true,
+          callData: encodeFunctionData({ abi, functionName: "pokeMany", args: [seeds] })
+        });
+      }
+      for (const a of awakenings) {
+        calls.push({
+          target: contractAddress,
+          allowFailure: true,
+          callData: encodeFunctionData({ abi, functionName: "pokeAwakening", args: [a.seedId, a.agentId] })
+        });
+      }
+      hash = await walletClient.writeContract({
+        address: MULTICALL3_ADDRESS,
+        abi: MULTICALL3_ABI,
+        functionName: "aggregate3",
+        args: [calls],
+        account
+      });
+    }
     await publicClient.waitForTransactionReceipt({ hash });
-    // Re-run the diff against the now-updated chain state and re-render the
-    // banner (which should now hide).
-    await refreshStaleBanner(displayedIds);
+    // Reload against the now-updated chain state; the banner should hide.
+    await loadReceipts();
   } catch (e) {
     showBanner("error", `Resync failed: ${e.shortMessage || e.message || e}`);
   } finally {
