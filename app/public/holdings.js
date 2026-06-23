@@ -2,91 +2,114 @@
 //
 // Two sets, unioned:
 //
-//   Set 1 — RESOLVED, currently-owned tokens. Derived from ERC-721 Transfer
-//   events on the Abnormies contract: scan transfers TO and FROM the wallet,
-//   keep the most recent Transfer per tokenId. If that Transfer landed the
-//   token AT the wallet, it's currently held. Captures OpenSea purchases and
-//   any secondary-market move that the receipt's frozen `claimant` can't.
+//   Set 1 — RESOLVED, currently-owned tokens. Read live from the contract:
+//   balanceOf gives the wallet's exact token count, then ownerOf is swept
+//   across the id space and any id the wallet currently owns is kept. The
+//   sweep stops as soon as that many are found, so a wallet holding a handful
+//   of tokens barely scans. Because it reads live ownership it captures
+//   OpenSea purchases and any secondary-market move that the receipt's frozen
+//   `claimant` can't.
 //
 //   Set 2 — UNRESOLVED claims. The receipt's `claimant` field is the only
 //   ownership signal that exists before `resolveReceipts` mints the ERC-721,
-//   because no Transfer event has fired yet. Scan all receipts and filter to
+//   because no token exists yet. Scan all receipts and filter to
 //   { claimant == wallet, resolved == false }. Once a receipt resolves the
 //   token migrates to Set 1 (and is excluded here by the resolved filter).
+//
+// Set 1 previously scanned ERC-721 Transfer events to derive current owners,
+// but public RPCs now gate historical eth_getLogs behind paid archive tokens,
+// which broke the holdings page. ownerOf / balanceOf are plain current state
+// that every node still serves for free, so Set 1 reads those instead.
 //
 // Resolved entries carry their abnormieId; unresolved entries don't have one
 // yet (null) — render code handles this as the "[unrevealed]" stand-in.
 
-const TRANSFER_EVENT = {
-  type: "event",
-  name: "Transfer",
-  inputs: [
-    { name: "from", type: "address", indexed: true },
-    { name: "to", type: "address", indexed: true },
-    { name: "tokenId", type: "uint256", indexed: true }
-  ]
-};
+const OWNER_CHUNK = 400; // ownerOf reads per multicall batch
 
-// Conservative pre-deploy floor for mainnet Abnormies (deploy was at block
-// 25,202,777 on 2026-05-29). Scans bound to `latest` so post-deploy growth
-// is captured automatically.
-const ABNORMIES_DEPLOY_BLOCK = 25_200_000n;
-const LOG_WINDOW = 50_000n; // publicnode caps eth_getLogs at 50k blocks/request
-
-async function scanTransfersChunked(publicClient, address, args, fromBlock, toBlock) {
-  const all = [];
-  for (let from = fromBlock; from <= toBlock; from += LOG_WINDOW) {
-    const to = from + LOG_WINDOW - 1n > toBlock ? toBlock : from + LOG_WINDOW - 1n;
-    const logs = await publicClient.getLogs({
-      address,
-      event: TRANSFER_EVENT,
-      args,
-      fromBlock: from,
-      toBlock: to
-    });
-    all.push(...logs);
-  }
-  return all;
-}
-
+// Resolve a wallet's currently-held, minted token ids by reading live ownership.
+// Token ids are 1-based (ownerOf(0) reverts). balanceOf bounds the work: once we
+// have found that many owned ids we stop. ownerOf reverts for burned ids; under
+// multicall that surfaces as a per-call failure we skip.
 async function scanCurrentOwnership(walletAddress, contract, publicClient) {
   const wallet = walletAddress.toLowerCase();
-  const latestBlock = await publicClient.getBlockNumber();
-  const [received, sent] = await Promise.all([
-    scanTransfersChunked(publicClient, contract.address, { to: walletAddress }, ABNORMIES_DEPLOY_BLOCK, latestBlock),
-    scanTransfersChunked(publicClient, contract.address, { from: walletAddress }, ABNORMIES_DEPLOY_BLOCK, latestBlock)
-  ]);
-  // Sort by (blockNumber, logIndex) so the last entry per tokenId is the most
-  // recent ownership decision for that token.
-  const all = [...received, ...sent].sort((a, b) => {
-    if (a.blockNumber !== b.blockNumber) return Number(a.blockNumber - b.blockNumber);
-    return a.logIndex - b.logIndex;
-  });
-  const lastTransfer = new Map();
-  for (const log of all) {
-    lastTransfer.set(log.args.tokenId.toString(), log);
-  }
+  const balance = Number(
+    await publicClient.readContract({
+      address: contract.address,
+      abi: contract.abi,
+      functionName: "balanceOf",
+      args: [walletAddress]
+    })
+  );
+  if (balance === 0) return [];
+
+  const maxSupply = Number(
+    await publicClient.readContract({
+      address: contract.address,
+      abi: contract.abi,
+      functionName: "MAX_SUPPLY"
+    })
+  );
+
   const owned = [];
-  for (const log of lastTransfer.values()) {
-    if (log.args.to.toLowerCase() === wallet) owned.push(Number(log.args.tokenId));
+  for (let start = 1; start <= maxSupply && owned.length < balance; start += OWNER_CHUNK) {
+    const end = Math.min(start + OWNER_CHUNK - 1, maxSupply);
+    const contracts = [];
+    for (let id = start; id <= end; id++) {
+      contracts.push({
+        address: contract.address,
+        abi: contract.abi,
+        functionName: "ownerOf",
+        args: [BigInt(id)]
+      });
+    }
+    let results;
+    try {
+      results = await publicClient.multicall({ contracts, allowFailure: true });
+    } catch {
+      // Fall back to sequential reads if the RPC rejects the batch.
+      results = [];
+      for (let id = start; id <= end; id++) {
+        try {
+          const o = await publicClient.readContract({
+            address: contract.address,
+            abi: contract.abi,
+            functionName: "ownerOf",
+            args: [BigInt(id)]
+          });
+          results.push({ status: "success", result: o });
+        } catch {
+          results.push({ status: "failure" });
+        }
+      }
+    }
+    results.forEach((res, i) => {
+      if (res.status === "success" && typeof res.result === "string" && res.result.toLowerCase() === wallet) {
+        owned.push(start + i);
+      }
+    });
   }
   return owned;
 }
 
 async function scanUnresolvedClaims(walletAddress, contract, publicClient) {
   const wallet = walletAddress.toLowerCase();
-  const len = Number(
-    await publicClient.readContract({
-      address: contract.address,
-      abi: contract.abi,
-      functionName: "receiptsLength"
-    })
-  );
-  if (len === 0) return [];
+  const [len, nextResolveIndex] = (
+    await Promise.all([
+      publicClient.readContract({ address: contract.address, abi: contract.abi, functionName: "receiptsLength" }),
+      publicClient.readContract({ address: contract.address, abi: contract.abi, functionName: "nextResolveIndex" })
+    ])
+  ).map(Number);
+
+  // Receipts resolve strictly in index order, so everything below
+  // nextResolveIndex is already resolved and is picked up by Set 1's live
+  // ownerOf sweep. Only the [nextResolveIndex, len) tail can hold unresolved
+  // claims, so scan just that — once resolution is complete this is empty and
+  // skips the receipt read entirely.
+  if (nextResolveIndex >= len) return [];
 
   const unresolved = [];
   const CHUNK = 400;
-  for (let start = 0; start < len; start += CHUNK) {
+  for (let start = nextResolveIndex; start < len; start += CHUNK) {
     const end = Math.min(start + CHUNK, len);
     const contracts = [];
     for (let i = start; i < end; i++) {
