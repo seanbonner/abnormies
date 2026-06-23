@@ -32,8 +32,15 @@ import { mainnet, sepolia } from "viem/chains";
 // the browser-only download handler instead.
 import { renderCanvas, enumerateSteps, COLOR_HEX } from "./renderer.js";
 
-// Agent-binding lookup, shared with the holdings page (clouds.js).
-import { fetchBinding } from "./binding.js";
+// Normies API lookups. fetchBinding is shared with the holdings page (clouds.js);
+// the rest are detail-page reads (customization count, burned seed image, live
+// indexed customization), each best-effort with an on-chain fallback.
+import {
+  fetchBinding,
+  fetchCustomizationCount,
+  burnedSeedImageUrl,
+  fetchCanvasCustomized
+} from "./binding.js";
 
 // ---------------------------------------------------------------------------
 // Pure helpers (DOM-free, exported for the Node test)
@@ -321,9 +328,12 @@ function bootstrap() {
     }
 
     // 4. Normies-side reads (image + owner). Burned Normies revert; tolerate it.
-    const [normieImg, ownerNormie] = await Promise.all([
+    //    customizationCount is the indexed transform-history length (best-effort,
+    //    null on failure so the panel falls back to the on-chain boolean).
+    const [normieImg, ownerNormie, customizationCount] = await Promise.all([
       normiesReader.read.tokenURI([seedId]).then(parseTokenURI).then((m) => m.image).catch(() => null),
-      normiesReader.read.ownerOf([seedId]).then((o) => getAddress(o)).catch(() => null)
+      normiesReader.read.ownerOf([seedId]).then((o) => getAddress(o)).catch(() => null),
+      fetchCustomizationCount(seedId)
     ]);
 
     // 5. Agent binding (off-chain). Called unconditionally: needed both to show
@@ -355,7 +365,7 @@ function bootstrap() {
     hero.alt = `Abnormie #${id}`;
 
     renderChips({ isStatic, chipDead, chipCustomized, aligned });
-    renderSeedPanel({ seedId, ownerNormie, burned: seed.burned, customized: seed.customized, awakened, agentId, normieImg });
+    renderSeedPanel({ seedId, ownerNormie, burned: seed.burned, customized: seed.customized, customizationCount, awakened, agentId, normieImg });
     renderActions({ seedDead: seed.burned, seedCustomized: seed.customized, isActive: !isStatic, ownsAbnormie });
     renderTraits(metadata.attributes || []);
 
@@ -401,25 +411,32 @@ function bootstrap() {
     $("chips").replaceChildren(...nodes);
   }
 
-  function renderSeedPanel({ seedId, ownerNormie, burned, customized, awakened, agentId, normieImg }) {
+  function renderSeedPanel({ seedId, ownerNormie, burned, customized, customizationCount, awakened, agentId, normieImg }) {
     const img = $("seed-img");
     // Drop any placeholder left by a prior render (wallet/chain changes re-run load).
     const prevPlaceholder = img.parentNode.querySelector(".seed-burned-placeholder");
     if (prevPlaceholder) prevPlaceholder.remove();
+    img.onerror = null;
     if (normieImg) {
       img.src = normieImg;
       img.hidden = false;
-    } else if (burned) {
-      // A burned seed's only image source (on-chain tokenURI) reverts, so there is
-      // nothing to load. Show an outlined stand-in box in the slot instead of an
-      // empty gap. When NOT burned, a missing image is some other failure we can't
-      // characterize, so we keep hiding it (below).
-      img.hidden = true;
-      const placeholder = document.createElement("div");
-      placeholder.className = "seed-burned-placeholder";
-      img.insertAdjacentElement("afterend", placeholder);
     } else {
-      img.hidden = true;
+      // No live image. A burned seed's on-chain tokenURI reverts (most common
+      // case), but any live fetch failure also lands here. Either way the burn
+      // history endpoint can still serve the seed's last image, so try it. If
+      // even that fails (e.g. a non-burned seed with a transient read error,
+      // which 404s here), fall back to the outlined stand-in box.
+      img.onerror = () => {
+        img.onerror = null;
+        img.hidden = true;
+        if (!img.parentNode.querySelector(".seed-burned-placeholder")) {
+          const placeholder = document.createElement("div");
+          placeholder.className = "seed-burned-placeholder";
+          img.insertAdjacentElement("afterend", placeholder);
+        }
+      };
+      img.src = burnedSeedImageUrl(seedId);
+      img.hidden = false;
     }
 
     const awakenedText =
@@ -432,10 +449,14 @@ function bootstrap() {
       OPENSEA_CHAIN_SLUG[expectedChainId] || "ethereum"
     }/${normiesAddress}/${seedId}`;
 
+    // Prefer the indexed customization count (full transform history length).
+    // Falls back to the on-chain customized boolean when the API read failed.
+    const customizedText =
+      customizationCount != null ? String(customizationCount) : customized ? "Yes" : "No";
     const rows = [
       ["Normie ID", `#${seedId}`],
       ["Owner", ownerText],
-      ["Customized", customized ? "Yes" : "No"],
+      ["Customized", customizedText],
       ["Awakened", awakenedText]
     ];
     const nodes = [];
@@ -901,6 +922,16 @@ function bootstrap() {
   // pokeAwakening (line 565) is one-way: it reverts AlreadyAwakened() if
   // seedAwakened is already true. So we only consider it needed when there's a
   // non-zero agentId from the Normies API AND seedAwakened is false.
+  // Indexed customization state for a seed, used by the Refresh staleness check.
+  // Tries the Normies indexer (api.normies.art) first; on any failure falls back
+  // to the on-chain NormiesCanvasStorage.isTransformed read. Returns a boolean or
+  // null (null/false both read as "not yet customized" by the caller).
+  async function readSeedCustomized(seedId) {
+    const indexed = await fetchCanvasCustomized(seedId);
+    if (indexed != null) return indexed;
+    return canvasStorageReader.read.isTransformed([seedId]).catch(() => null);
+  }
+
   async function onUpdateFromNormies(ev) {
     const btn = ev.currentTarget;
     const status = $("action-status");
@@ -929,9 +960,11 @@ function bootstrap() {
     try {
       // Free pre-flight reads (parallel). All can fail individually; we map
       // failures to the relevant decision input rather than aborting.
+      // Customization comes from the indexer first, falling back to the
+      // NormiesCanvasStorage.isTransformed RPC read when the API is unavailable.
       const [ownerRes, transformedRes, seedState, binding] = await Promise.all([
         normiesReader.read.ownerOf([seedId]).catch(() => null),
-        canvasStorageReader.read.isTransformed([seedId]).catch(() => null),
+        readSeedCustomized(seedId),
         reader.read.getSeedState([seedId]),
         fetchBinding(seedId)
       ]);
