@@ -1,120 +1,85 @@
-# Abnormies site — Claude Code brief
+# Abnormies site — abnormies.art
 
-This folder is the working tree for the Abnormies project's public website. It deploys to **abnormies.art** via Cloudflare Pages, sourced from **https://github.com/seanbonner/abnormies**.
+Working tree for the public Abnormies website. Deploys to **abnormies.art** via
+Cloudflare Pages from **https://github.com/seanbonner/abnormies**, auto-deploying
+on every push to `main`.
 
-## Your role
+This is **not** the static teaser it started as. `app/` is a real build: esbuild
+bundles, viem wallet integration, a holdings grid, an animated detail page with
+GIF export, and pre-generated merkle proofs. Do not describe it as a pure static
+site and do not "restore" it to one.
 
-You manage the git repo and Cloudflare deployment. Sean authors site content in this folder. You commit, push, and handle deployment configuration. You do not modify content Sean has authored.
+## Current state — read before writing any copy
 
-## File layout
+Verified on-chain 2026-08-09: the collection is **sold out, sealed, revealed, and
+fully resolved**. `phase = 2`, `phase2RemainingSlots = 0`, `nextResolveIndex =
+10000`. There is no mint page and no mint bundle; `build.mjs` says so explicitly.
 
-| File | Purpose |
-|---|---|
-| `index.html` | Public teaser. Front door of the site. |
-| `spec.html` | Specification rendered for browsers. |
-| `spec.md` | Specification in markdown (machine-readable, for LLMs and agents). |
-| `_headers` | Cloudflare Pages header overrides. |
-| `README.md` | Minimal repo description (public-facing on GitHub). |
-| `CLAUDE.md` | This file. Your standing context. |
-| `.gitignore` | Standard ignores. |
+**Known stale copy, still live:** `llms.txt` ("Phase II public mint is open"),
+the `og:description` in the root `index.html` ("Phase II mint open"), and `og.png`
+all still advertise an open mint. These three surfaces hardcode the phase and
+were never updated when minting closed. Fix them when touching this project.
 
-If files are missing from this list, that's fine — Sean adds them as needed. If files exist that aren't on this list, leave them alone.
+`README.md` is also stale — it lists only the four teaser files and claims the
+minting UI lives in a separate repo. It is public-facing on GitHub.
 
-## `_headers` contents
+## Build
+
+The publish root is **`app/dist`**, produced by `app/scripts/build.mjs`. Nothing
+is served from the repo root directly.
 
 ```
-/spec.md
-  Content-Type: text/markdown; charset=utf-8
+cd app && npm run build      # dev: npm run dev serves dist/ on :8000
 ```
 
-This ensures `spec.md` renders as text in the browser instead of triggering a download.
+Build config comes from **`process.env`** — the Cloudflare Pages environment
+variables, not `app/.env`. That local file is for local builds only; setting a
+value there does not change production.
 
-## Initial setup (run once)
-
-If the folder is not yet a git repo:
-
-```bash
-git init -b main
-git remote add origin https://github.com/seanbonner/abnormies.git
-git add .
-git commit -m "Initial commit"
-git push -u origin main
+```
+FRONTEND_CHAIN_ID  FRONTEND_CONTRACT_ADDRESS  FRONTEND_RPC_URL
+FRONTEND_ETHERSCAN_BASE_URL  FRONTEND_NORMIES_ADDRESS  FRONTEND_RENDERER_ADDRESS
 ```
 
-If `gh` is configured and you need to set the remote afresh:
+Merkle proofs are **pre-generated and committed** at `app/public/proofs/`, built
+by `npm run build-proofs` from `app/snapshot/`. They are not regenerated at
+deploy time.
 
-```bash
-gh repo set-default seanbonner/abnormies
-```
+Runtime has **no CDN dependencies** by design — viem is bundled, gif.js is
+vendored and its worker copied same-origin. Keep it that way.
 
-## Cloudflare Pages setup (one time)
+## Layout
 
-The cleanest path is the Cloudflare web UI:
+- `app/newsite/pages/` + `partials/` — page templates and the shared
+  header/footer the build stitches in. Source of truth for page content.
+- `app/public/` — wallet scripts (`clouds.js` → `/home`, `abnormie.js` →
+  `/abnormie`), styles, ABIs, proofs.
+- `app/scripts/build.mjs` — renders pages, bundles scripts, slims the Foundry
+  artifact to a bare ABI, copies an **explicit allowlist** of repo-root files.
+  Anything not on that list (README, CLAUDE.md, `app/` source, node_modules) is
+  never deployed.
+- Repo root: `spec.md` (canonical), `_headers`, `_redirects`, `llms.txt`,
+  `og.png`, `robots.txt`, favicons.
 
-1. Cloudflare dashboard → **Workers & Pages** → **Create application** → **Pages** → **Connect to Git**.
-2. Authorize and select `seanbonner/abnormies`.
-3. Build settings: leave **build command** and **output directory** blank. This is a pure static site; no build step.
-4. Production branch: `main`.
-5. Deploy.
+`_headers` serves `spec.md` as `text/markdown; charset=utf-8` so it renders in
+the browser instead of downloading. `_redirects` 301s the old `/app/*` URLs and
+`/newsitedemo/*` to the promoted clean routes.
 
-After first deploy:
+The `post-reveal` branch is **fully merged into `main`** and carries nothing
+`main` lacks. It can be deleted.
 
-6. In the Pages project settings → **Custom domains** → add `abnormies.art`.
-7. DNS: if `abnormies.art` already uses Cloudflare nameservers, the CNAME is added automatically. If not, configure DNS at the registrar to point at the Pages deployment.
+## Working rules
 
-CLI alternative (if `wrangler` is authed via `wrangler login`):
-
-```bash
-npx wrangler pages project create abnormies --production-branch=main
-npx wrangler pages deploy . --project-name=abnormies
-```
-
-Custom domain via CLI:
-
-```bash
-npx wrangler pages domain add abnormies.art --project-name=abnormies
-```
-
-The web UI flow is usually faster. Recommend it to Sean unless he prefers CLI.
-
-## Routine workflow
-
-When Sean drops updated files in this folder:
-
-```bash
-git status                                    # confirm what changed
-git add .
-git commit -m "<concise imperative description>"
-git push
-```
-
-Cloudflare Pages auto-deploys on push to `main`. No further action needed.
-
-**Commit message style:** imperative, brief, no preamble. Examples:
-- `Update teaser copy`
-- `Fix spec terminology`
-- `Tweak prototype defaults`
-- `Update _headers`
-
-## Don't
-
-- Don't modify the content of files Sean has authored (HTML, MD). If something looks broken, flag it but don't fix it.
-- Don't reorganize the file structure.
-- Don't add a build pipeline. This is a static site by design.
+- Push directly to `main`. No branches, no PRs, no force-push without explicit
+  instruction, no remotes other than `origin`.
 - Don't add analytics, tracking, or third-party scripts.
-- Don't create branches unless Sean asks. Push directly to `main`.
-- Don't open PRs. Direct pushes.
-- Don't push to remotes other than `origin`.
-- Don't force-push without explicit instruction.
-
-## Project context
-
-**Abnormies** is a fully on-chain NFT derivative art collection paired 1:1 with **Normies** (Serc, Feb 2026). The site is a teaser and specification publication. There is no minting on this site, no wallet connect, no commerce. Pure static HTML. Smart contracts and minting UI will live in separate repos (forthcoming).
-
-License: CC0.
+- Don't add runtime CDN dependencies.
+- Commit messages: imperative and brief. `Fix holdings scan`, `Update _headers`.
 
 ## Spec authority
 
-Treat the spec as authoritative for any factual question about the project. Conflicts between this brief and the spec resolve toward the spec.
+`spec.md` is authoritative for any factual question about the project. Conflicts
+between this brief and the spec resolve toward the spec. Contract-side detail
+lives in `../contracts/CLAUDE.md` and its skills.
 
 General working preferences live in the shared `01-PROJECTS/CLAUDE.md`.
