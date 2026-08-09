@@ -15,12 +15,20 @@ Verified on-chain 2026-08-09: the collection is **sold out, sealed, revealed, an
 fully resolved**. `phase = 2`, `phase2RemainingSlots = 0`, `nextResolveIndex =
 10000`. There is no mint page and no mint bundle; `build.mjs` says so explicitly.
 
-**Known stale copy, still live:** `llms.txt` ("Phase II public mint is open"),
-the `og:description` in the root `index.html` ("Phase II mint open"), and `og.png`
-all still advertise an open mint. These three surfaces hardcode the phase and
-were never updated when minting closed. Fix them when touching this project.
+`llms.txt` was updated to match (2026-08-09). It ships verbatim from the repo
+root, so it is the one public surface where the phase is hardcoded — update it
+whenever contract state changes.
 
-`README.md` is also stale — it lists only the four teaser files and claims the
+**Do not "fix" these — they are already correct.** `og.png` carries only the
+wordmark and an evergreen tagline; there is no mint copy in it and no reason to
+re-run `build-og.py`. The rendered pages carry no `og:description` or
+`twitter:description` at all (`renderDoc` in `build.mjs` omits them deliberately,
+for exactly this reason). The root `index.html` still has stale "Phase II mint
+open" meta tags, but it is **not deployed** — `build.mjs` renders its own
+`index.html` and the root copy is excluded from `staticRootFiles`. It is a dead
+teaser file.
+
+`README.md` is stale — it lists only the four teaser files and claims the
 minting UI lives in a separate repo. It is public-facing on GitHub.
 
 ## Build

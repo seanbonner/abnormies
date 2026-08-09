@@ -12,4 +12,4 @@ Abnormies is paired 1:1 with Normies. Each Abnormie has a seed Normie whose on-c
 
 ## Status
 
-Site is live. Smart contracts are deployed; Phase II public mint is open.
+Site is live. Minting is closed. All 10,000 Abnormies are minted, revealed, and fully resolved on-chain. Each one continues to evolve as its seed Normie is transferred and customized.
